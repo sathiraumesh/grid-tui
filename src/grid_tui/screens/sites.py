@@ -1,4 +1,5 @@
-"""The list of Grid'5000 sites. Clicking one (or enter) opens its clusters.
+"""The list of Grid'5000 sites. Clicking one (or enter) opens its clusters;
+/ opens the search.
 
     ╭─ sites: 2 ───────────────────────────────────────╮
     │ SITE     NAME     DESCRIPTION                     │
@@ -11,17 +12,24 @@ from __future__ import annotations
 
 from typing import Any
 
+from textual.binding import Binding
 from textual.widgets import DataTable
 
 from grid_tui.models import Site
 from grid_tui.screens.base import ListScreen
 from grid_tui.screens.clusters import ClustersScreen
+from grid_tui.screens.search import SearchScreen
 
 
 class SitesScreen(ListScreen[Site]):
-    """The list of sites."""
+    """The list of sites. / opens the search."""
 
     COLUMNS = ("SITE", "NAME", "DESCRIPTION")
+
+    BINDINGS = [
+        Binding("slash", "search", "Search"),
+        *ListScreen.BINDINGS,
+    ]
 
     async def fetch(self) -> list[Site]:
         return await self.api.sites()
@@ -43,3 +51,9 @@ class SitesScreen(ListScreen[Site]):
         site = self.selected
         if site is not None:
             self.app.push_screen(ClustersScreen(self.api, site))
+
+    def action_search(self) -> None:
+        """Open the search. It is made once and kept, with what it loaded."""
+        if not self.app.is_screen_installed("search"):
+            self.app.install_screen(SearchScreen(self.api, self.items or None), "search")
+        self.app.push_screen("search")

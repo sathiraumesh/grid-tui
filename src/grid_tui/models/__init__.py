@@ -5,11 +5,13 @@ the screens.
     cluster.py   Cluster
     hardware.py  Hardware, and its Disk, NIC and GPU
     node.py      Node (a machine) and the Reservations (OAR jobs) holding it
+    search.py    SearchEntry, Requirements: which clusters meet a search
 """
 
 from grid_tui.models.cluster import Cluster
 from grid_tui.models.hardware import GPU, NIC, Disk, Hardware
 from grid_tui.models.node import Node, Reservation, node_order
+from grid_tui.models.search import Requirements, SearchEntry
 from grid_tui.models.site import Site
 
-__all__ = ["Cluster", "Disk", "GPU", "Hardware", "NIC", "Node", "Reservation", "Site", "node_order"]
+__all__ = ["Cluster", "Disk", "GPU", "Hardware", "NIC", "Node", "Requirements", "Reservation", "SearchEntry", "Site", "node_order"]
