@@ -1,12 +1,12 @@
-"""The Textual app: it opens on the list of Grid'5000 sites; a click on one
-opens its clusters."""
+"""The Textual app: the main screen's tabs, Sites first."""
 
 from __future__ import annotations
 
 from textual.app import App
 
+from grid_tui.api import Api
 from grid_tui.grid5000 import Client
-from grid_tui.screens import Api, SitesScreen
+from grid_tui.screens import MainScreen
 
 
 class GridTUI(App):
@@ -20,7 +20,7 @@ class GridTUI(App):
         self.client = client if client is not None else Client.from_env()
 
     def on_mount(self) -> None:
-        self.push_screen(SitesScreen(self.client))
+        self.push_screen(MainScreen(self.client))
 
 
 def main() -> None:

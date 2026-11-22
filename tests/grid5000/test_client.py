@@ -264,14 +264,16 @@ async def test_nodes_errors() -> None:
 
 
 async def test_site_nodes_is_one_call_for_the_whole_site() -> None:
-    seen = []
+    seen, queries = [], []
 
     def api(request: httpx.Request) -> httpx.Response:
         seen.append(request.url.path)
+        queries.append(request.url.query.decode())
         return httpx.Response(200, json=STATUS)
 
     nodes = await Client("https://api.test/stable", transport=httpx.MockTransport(api)).site_nodes("nancy")
     assert seen == ["/stable/sites/nancy/status"]
+    assert queries == ["disks=no"]  # the disks aren't read: they aren't asked for
     assert [n.name for n in nodes] == ["gros-1", "gros-2", "gros-10"]
     with pytest.raises(ValueError):
         await Client().site_nodes("")

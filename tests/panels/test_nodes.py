@@ -1,26 +1,24 @@
-"""One cluster in detail: its hardware, loading, errors, and esc."""
+"""Nodes: the cluster picked, in detail: its hardware, its nodes, loading,
+errors, esc, and the reservations."""
 
 from __future__ import annotations
 
 import asyncio
-
-from grid_tui.app import GridTUI
 from datetime import datetime, timedelta
 
 from textual.widgets import DataTable
 
+from grid_tui.app import GridTUI
 from grid_tui.models import GPU, NIC, Disk, Hardware, Reservation
-from grid_tui.screens import ClusterDetailScreen, ClustersScreen, SitesScreen
-from grid_tui.screens.cluster import cpu, disk, gb, gib, gpus, job_text, joined, nic
-from tests.fakes import TWO_SITES, FakeClient, detail, open_gros, status
+from grid_tui.panels.nodes import cpu, disk, gb, gib, gpus, job_text, joined, nic
+from tests.fakes import TWO_SITES, FakeClient, detail, open_gros, settle, status
 
 
 async def test_enter_on_a_cluster_shows_its_detail() -> None:
     app = GridTUI(FakeClient(TWO_SITES))
     async with app.run_test(size=(120, 30)) as pilot:
         await open_gros(pilot)
-        screen = app.screen
-        assert isinstance(screen, ClusterDetailScreen) and screen.cluster.uid == "gros"
+        assert app.screen.active == "nodes" and app.screen.nodes.cluster.uid == "gros"
         text = detail(app)
         for line in [
             "MODEL      Dell PowerEdge R640",
@@ -35,18 +33,18 @@ async def test_enter_on_a_cluster_shows_its_detail() -> None:
             "METRICS    wattmetre_power_watt",
         ]:
             assert line in text, f"{line!r} not in\n{text}"
-        widget = screen.query_one("#detail")
+        widget = app.screen.nodes.query_one("#detail")
         assert widget.border_title == "site: nancy · cluster: gros"
         assert widget.border_subtitle == "$ curl https://api.test/sites/nancy/clusters/gros/nodes"
 
 async def test_the_same_gpus_are_counted_together() -> None:
     app = GridTUI(FakeClient(TWO_SITES))
     async with app.run_test(size=(120, 30)) as pilot:
-        await pilot.pause()
+        await settle(pilot)
         await pilot.press("enter")
-        await pilot.pause()
+        await settle(pilot)
         await pilot.press("enter")  # graffiti: the GPU node here
-        await pilot.pause()
+        await settle(pilot)
         text = detail(app)
         assert "GPU        4 × Nvidia A100 40 GiB" in text
         assert "CPU        2 × AMD EPYC 7452 · 64 cores" in text
@@ -57,12 +55,17 @@ async def test_detail_says_loading_until_the_hardware_arrives() -> None:
     client.hardware_gate = asyncio.Event()
     app = GridTUI(client)
     async with app.run_test(size=(120, 30)) as pilot:
-        await open_gros(pilot)
+        await settle(pilot)
+        await pilot.press("enter")
+        await settle(pilot)
+        await pilot.press("down", "enter")  # gros: its hardware waits
+        for _ in range(5):
+            await pilot.pause()
         assert "CPU        loading" in detail(app)
         assert "MODEL      Dell PowerEdge R640" in detail(app)  # known from the list already
         assert status(app) == "loading…"
         client.hardware_gate.set()
-        await pilot.pause()
+        await settle(pilot)
         assert "Intel Xeon Gold 5220" in detail(app)
         assert status(app) == ""
 
@@ -75,7 +78,7 @@ async def test_detail_error_and_reload() -> None:
         assert status(app) == "error: GET /sites/nancy/clusters/gros/nodes: 500 [oops]"  # [ ] shown as is
         client.hardware_error = None
         await pilot.press("r")
-        await pilot.pause()
+        await settle(pilot)
         assert "Intel Xeon Gold 5220" in detail(app)
         assert status(app) == ""
 
@@ -84,12 +87,11 @@ async def test_esc_from_the_detail_goes_back_to_the_same_cluster() -> None:
     async with app.run_test(size=(120, 30)) as pilot:
         await open_gros(pilot)
         await pilot.press("escape")
-        await pilot.pause()
-        assert isinstance(app.screen, ClustersScreen)
-        assert app.screen.selected.uid == "gros"
+        await settle(pilot)
+        assert app.screen.active == "clusters" and app.screen.clusters.selected.uid == "gros"
         await pilot.press("escape")
-        await pilot.pause()
-        assert isinstance(app.screen, SitesScreen)
+        await settle(pilot)
+        assert app.screen.active == "sites"
 
 
 # How the hardware reads.
@@ -120,7 +122,7 @@ def test_hardware_text() -> None:
 
 
 def node_rows(app: GridTUI) -> list[list[str]]:
-    table = app.screen.query_one("#nodes", DataTable)
+    table = app.screen.nodes.query_one("#nodes", DataTable)
     return [[str(c) for c in table.get_row_at(i)] for i in range(table.row_count)]
 
 
@@ -137,7 +139,7 @@ async def test_detail_shows_the_nodes() -> None:
         assert rows[0][3].startswith("next #4600 eve ") and rows[0][3].endswith("(1h)")
         assert rows[1][3].startswith("#4521 bob ") and rows[1][3].endswith("(3h) Running")
         assert rows[2][3] == ""
-        table = app.screen.query_one("#nodes", DataTable)
+        table = app.screen.nodes.query_one("#nodes", DataTable)
         assert table.border_title == "nodes: 3 · free 1 · busy 1 · down 1"
         assert table.border_subtitle == "$ curl https://api.test/sites/nancy/clusters/gros/status"
 
@@ -147,8 +149,8 @@ async def test_the_nodes_table_takes_the_keys() -> None:
     async with app.run_test(size=(140, 40)) as pilot:
         await open_gros(pilot)
         await pilot.press("down", "down")
-        assert app.screen.query_one("#nodes", DataTable).cursor_row == 2
-        assert app.screen.nodes[2].name == "gros-10"
+        assert app.screen.nodes.query_one("#nodes", DataTable).cursor_row == 2
+        assert app.screen.nodes.nodes[2].name == "gros-10"
 
 
 async def test_one_part_failing_keeps_the_other() -> None:
@@ -162,7 +164,7 @@ async def test_one_part_failing_keeps_the_other() -> None:
         assert status(app) == "error: GET /sites/nancy/clusters/gros/status: 500"
         client.nodes_error = None
         await pilot.press("r")
-        await pilot.pause()
+        await settle(pilot)
         assert len(node_rows(app)) == 3
         assert status(app) == ""
 
@@ -177,3 +179,19 @@ def test_job_text() -> None:
         "#4 d 13:30→15:15 (1h45m) besteffort Running"
     )
     assert job_text(None, now) == ""
+
+
+async def test_enter_on_a_node_shows_the_current_reservations_on_it() -> None:
+    client = FakeClient(TWO_SITES)
+    app = GridTUI(client)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await open_gros(pilot)
+        calls = client.calls
+        await pilot.press("down", "enter")  # gros-2
+        await settle(pilot)
+        current = app.screen.current
+        assert app.screen.active == "current" and current.gantt.selected.name == "gros-2"
+        assert client.calls == calls  # the nodes loaded here, not again
+        await pilot.press("escape")
+        await settle(pilot)
+        assert app.screen.active == "nodes"

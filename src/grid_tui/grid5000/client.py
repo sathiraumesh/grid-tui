@@ -20,10 +20,15 @@ import httpx
 
 from grid_tui.grid5000.jobs import job_spec, jobs_path, submit_command
 from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Node, Reservation, Site, node_order
-from grid_tui.models.job import JobRequest
+from grid_tui.models.job import Job, JobRequest
 
 DEFAULT_BASE_URL = "https://api.grid5000.fr/stable"
 SITES_PATH = "/sites"
+
+# The status answer also lists the nodes' disk reservations unless told not
+# to; the app never reads them, and leaving them out avoids an API crash
+# seen on one site (bordeaux: "undefined method `[]' for nil").
+STATUS_QUERY = "?disks=no"
 
 
 class ApiError(Exception):
@@ -109,6 +114,32 @@ class Client:
             raise ValueError("submit: the answer has no job number")
         return job_id
 
+    async def my_jobs(self, site: str, user: str) -> list[Job]:
+        """user's jobs at site that are waiting, launching or running:
+        GET /sites/{site}/jobs?user=…&state=waiting,launching,running (as EnOSlib asks)."""
+        if not site or not user:
+            raise ValueError("jobs: a site and a user are needed")
+        query = f"?user={quote(user, safe='')}&state=waiting,launching,running"
+        data = await self._get(jobs_path(site) + query)
+        jobs = []
+        for j in each(data, "items"):
+            start = num(j, "started_at") or num(j, "scheduled_at")
+            jobs.append(Job(
+                site=site,
+                job_id=int(num(j, "uid")),
+                state=text(j, "state"),
+                user=text(j, "user") or text(j, "user_uid"),
+                name=text(j, "name"),
+                queue=text(j, "queue"),
+                project=text(j, "project"),
+                start=datetime.fromtimestamp(start).astimezone() if start > 0 else None,
+                walltime=timedelta(seconds=num(j, "walltime")),
+                nodes=tuple(str(n).split(".", 1)[0] for n in dig(j, "assigned_nodes", default=[])
+                            if isinstance(n, str)),
+                types=tuple(t for t in dig(j, "types", default=[]) if isinstance(t, str)),
+            ))
+        return sorted(jobs, key=lambda j: (j.start is None, j.start or datetime.max.astimezone(), j.job_id))
+
     async def cancel_job(self, site: str, job_id: int) -> None:
         """Cancel job job_id of site."""
         if not site or job_id <= 0:
@@ -185,7 +216,7 @@ class Client:
         """
         if not site or not cluster:
             raise ValueError("nodes: a site and a cluster are needed")
-        data = await self._get(f"{clusters_path(site)}/{quote(cluster, safe='')}/status")
+        data = await self._get(f"{clusters_path(site)}/{quote(cluster, safe='')}/status{STATUS_QUERY}")
         return parse_status(data)
 
     async def site_nodes(self, site: str) -> list[Node]:
@@ -193,7 +224,7 @@ class Client:
         The answer has the same shape as a cluster's status."""
         if not site:
             raise ValueError("site nodes: no site given")
-        return parse_status(await self._get(f"{SITES_PATH}/{quote(site, safe='')}/status"))
+        return parse_status(await self._get(f"{SITES_PATH}/{quote(site, safe='')}/status{STATUS_QUERY}"))
 
 
 # Reading the API's JSON safely: each of these returns a default when a key

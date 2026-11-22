@@ -1,7 +1,8 @@
-"""A cluster's reservations: a time line, a week or a month (widgets/timeline.py).
+"""Reservations › Current: a cluster's reservations, as a time line, a week
+or a month (widgets/timeline.py).
 
-Opened from a cluster's detail (enter on a node, or g: with the nodes it
-has) or from the clusters (g: it loads them). esc goes back.
+It shows the cluster chosen in Nodes (enter on a node: with the nodes it
+has), in Clusters (g: it loads them), or from My reservations.
 
     t w m   the time line, the week, the month (v: the next one)
     n       back to the time now
@@ -15,7 +16,7 @@ On the time line:  ↑↓ nodes · ←→ a cell · H L a day · [ ] previous / 
 On the week:       ←→ days · ↑↓ 2-hour slots · [ ] weeks · enter: the time line there
 On the month:      ←→ days · ↑↓ weeks · [ ] months · enter: the time line on that day
 
-A clock ticks every CLOCK_EVERY seconds while the screen is open: the now
+A clock ticks every CLOCK_EVERY seconds: the now
 marks move with the time, with no call to the API.
 """
 
@@ -26,13 +27,13 @@ from datetime import datetime, timedelta
 from textual import events, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.screen import Screen
-from textual.widgets import Footer, Header, Static
+from textual.containers import Vertical
+from textual.widgets import Static
 
 from grid_tui.format import clock, duration
 from grid_tui.models import Cluster, Gantt, JobRequest, Mode, Node, Site
 from grid_tui.models.gantt import DAY, WEEK_SLOT
-from grid_tui.screens.base import Api
+from grid_tui.api import Api
 from grid_tui.screens.reserve import ConfirmDialog, ReserveDialog
 from grid_tui.widgets import ReservationsView
 
@@ -43,11 +44,10 @@ def now() -> datetime:
     return datetime.now().astimezone()
 
 
-class ReservationsScreen(Screen):
+class ReservationsPanel(Vertical):
     """The reservations of one cluster."""
 
     BINDINGS = [
-        Binding("escape,backspace", "app.pop_screen", "Back"),
         Binding("t", "view('timeline')", "Timeline"),
         Binding("w", "view('week')", "Week"),
         Binding("m", "view('month')", "Month"),
@@ -56,7 +56,6 @@ class ReservationsScreen(Screen):
         Binding("b", "reserve", "Reserve"),
         Binding("x", "cancel_job", "Cancel job"),
         Binding("r", "reload", "Reload"),
-        Binding("q", "app.quit", "Quit"),
         Binding("up,k", "vertical(-1)", "Up", show=False),
         Binding("down,j", "vertical(1)", "Down", show=False),
         Binding("left,h", "horizontal(-1)", "Earlier", show=False),
@@ -71,28 +70,43 @@ class ReservationsScreen(Screen):
     ]
 
     DEFAULT_CSS = """
-    ReservationsScreen ReservationsView {
+    ReservationsPanel ReservationsView {
         border: round $accent;
         border-title-color: $text;
         border-subtitle-color: $text-muted;
         padding: 0 1;
     }
-    ReservationsScreen #status { height: 1; padding: 0 1; color: $text-muted; }
-    ReservationsScreen #status.error { color: $error; text-style: bold; }
+    ReservationsPanel ReservationsView:focus { border: round $accent-lighten-1; }
+    ReservationsPanel .status { height: 1; padding: 0 1; color: $text-muted; }
+    ReservationsPanel .status.error { color: $error; text-style: bold; }
     """
 
-    def __init__(self, api: Api, site: Site, cluster: Cluster, nodes: list[Node] | None = None, node: int = 0) -> None:
-        super().__init__()
-        self.api, self.site, self.cluster = api, site, cluster
-        self.gantt: Gantt | None = Gantt(nodes, now(), node=node) if nodes is not None else None
+    def __init__(self, api: Api, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.api = api
+        self.site: Site | None = None
+        self.cluster: Cluster | None = None
+        self.gantt: Gantt | None = None
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        view = ReservationsView(self.gantt)
-        view.border_subtitle = "$ " + self.api.command(f"/sites/{self.site.uid}/clusters/{self.cluster.uid}/status")
-        yield view
-        yield Static("", id="status", markup=False)
-        yield Footer()
+        yield ReservationsView(None)
+        yield Static("", classes="status", markup=False)
+
+    def show_cluster(self, site: Site, cluster: Cluster, nodes: list[Node] | None = None, node: int = 0) -> None:
+        """Show cluster's reservations: with the nodes given, or loading them."""
+        same = (self.site, self.cluster) == (site, cluster)
+        self.site, self.cluster = site, cluster
+        self.view.border_subtitle = "$ " + self.api.command(f"/sites/{site.uid}/clusters/{cluster.uid}/status")
+        if nodes is not None:
+            old = self.gantt if same else None
+            self.gantt = Gantt(nodes, now(), node=node, clock=now())
+            if old is not None:  # the same cluster again: keep the view and the zoom
+                self.gantt.mode, self.gantt.zoom = old.mode, old.zoom
+            self.redraw()
+        elif not same or self.gantt is None:
+            self.gantt = None
+            self.redraw()
+            self.load()
 
     @property
     def view(self) -> ReservationsView:
@@ -100,8 +114,7 @@ class ReservationsScreen(Screen):
 
     def on_mount(self) -> None:
         self.redraw()
-        if self.gantt is None:
-            self.load()
+        self.set_status("choose a node in Nodes (3), or g on a cluster in Clusters (2)")
         self.set_interval(CLOCK_EVERY, self.tick)
 
     def tick(self) -> None:
@@ -113,17 +126,22 @@ class ReservationsScreen(Screen):
     # Loading.
 
     def action_reload(self) -> None:
-        self.load()
+        if self.cluster is not None:
+            self.load()
 
     @work(exclusive=True)
     async def load(self) -> None:
         """Load the nodes, keeping the view, the zoom and the cursors."""
+        assert self.site is not None and self.cluster is not None
         self.set_status("loading…")
+        self.view.loading = True
         try:
             nodes = await self.api.nodes(self.site.uid, self.cluster.uid)
         except Exception as e:
             self.set_status(f"error: {e}", error=True)
             return
+        finally:
+            self.view.loading = False
         old = self.gantt
         g = Gantt(nodes, now())
         if old is not None:
@@ -135,12 +153,16 @@ class ReservationsScreen(Screen):
         self.set_status("")
 
     def set_status(self, text: str, *, error: bool = False) -> None:
-        status = self.query_one("#status", Static)
+        status = self.query_one(".status", Static)
         status.update(text)
         status.set_class(error, "error")
 
     def redraw(self) -> None:
         g = self.gantt
+        if self.site is None or self.cluster is None:
+            self.view.border_title = "reservations"
+            self.view.show(None)
+            return
         title = f"site: {self.site.uid} · cluster: {self.cluster.uid} · reservations"
         if g is not None:
             title += f": {g.mode.value}"
@@ -242,7 +264,7 @@ class ReservationsScreen(Screen):
     def action_reserve(self) -> None:
         """b: a dialog to reserve from the cursor's time (a week slot lasts 2h)."""
         g = self.gantt
-        if g is None:
+        if g is None or self.site is None or self.cluster is None:
             return
         start = g.cursor_time if g.mode is Mode.TIMELINE else (g.day or g.now)
         hours = int(WEEK_SLOT / timedelta(hours=1)) if g.mode is Mode.WEEK else 1
@@ -289,6 +311,7 @@ class ReservationsScreen(Screen):
 
     @work(exclusive=True, group="jobs")
     async def cancel(self, job_id: int) -> None:
+        assert self.site is not None
         self.set_status(f"cancelling job #{job_id}…")
         try:
             await self.api.cancel_job(self.site.uid, job_id)

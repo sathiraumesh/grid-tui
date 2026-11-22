@@ -8,13 +8,12 @@
     │ Min cores / node  [32]  ││                                                         │
     ╰─────────────────────────╯╰─────────────────────────────────────────────────────────╯
 
-/ on the sites opens it. The first time, every site's clusters and their
-hardware load, a site at a time in parallel; each fills in the results
-when it arrives. The screen is kept, with what it loaded and what is set,
-for the next /; ctrl+r loads everything again.
+The first time the tab is opened, every site's clusters and their hardware
+load, a site at a time in parallel; each fills in the results when it
+arrives. ctrl+r loads everything again.
 
 Every change to the form updates the results. tab moves between the
-fields and the results; enter on a result opens its detail; esc goes back.
+fields and the results; enter on a result opens it in Nodes.
 The choices (sites, CPU makers, GPU models) are what was found.
 """
 
@@ -25,9 +24,8 @@ import asyncio
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
-from textual.screen import Screen
-from textual.widgets import Checkbox, DataTable, Footer, Header, Input, Label, Select, Static
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widgets import Checkbox, DataTable, Input, Label, Select, Static
 
 from grid_tui.models import Hardware, Site
 from grid_tui.models.search import (
@@ -39,8 +37,9 @@ from grid_tui.models.search import (
     results,
     site_choices,
 )
-from grid_tui.screens.base import Api
-from grid_tui.screens.cluster import ClusterDetailScreen, gib, gpus, joined, nic
+from grid_tui.api import Api
+from grid_tui.panels.messages import ClusterChosen
+from grid_tui.panels.nodes import gib, gpus, joined, nic
 
 # The form's choices and numbers: (widget id, label).
 CHOICES = [("site", "Site"), ("cpu", "CPU"), ("gpu", "GPU model"), ("disk", "Disk")]
@@ -54,37 +53,37 @@ NUMBERS = [
 COLUMNS = ("SITE", "CLUSTER", "NODES", "CPU", "CORES", "MEMORY", "GPU", "NETWORK", "WATTMETER")
 
 
-class SearchScreen(Screen):
+class SearchPanel(Vertical):
     """A form of requirements, and the clusters of every site that meet them."""
 
     BINDINGS = [
-        Binding("escape", "app.pop_screen", "Back"),
         Binding("ctrl+r", "reload", "Reload"),  # r is a letter: the fields take it
     ]
 
     DEFAULT_CSS = """
-    SearchScreen #form {
+    SearchPanel #form {
         width: 38;
         border: round $accent;
         border-title-color: $text;
         padding: 0 1;
     }
-    SearchScreen #form Label { margin-top: 1; color: $text-muted; }
-    SearchScreen #form Checkbox { margin-top: 1; }
-    SearchScreen #results {
+    SearchPanel #form Label { margin-top: 1; color: $text-muted; }
+    SearchPanel #form Checkbox { margin-top: 1; }
+    SearchPanel #results {
         width: 1fr;
         border: round $accent;
         border-title-color: $text;
         border-subtitle-color: $text-muted;
     }
-    SearchScreen #status { height: 1; padding: 0 1; color: $text-muted; }
-    SearchScreen #status.error { color: $error; text-style: bold; }
+    SearchPanel #status { height: 1; padding: 0 1; color: $text-muted; }
+    SearchPanel #status.error { color: $error; text-style: bold; }
     """
 
-    def __init__(self, api: Api, sites: list[Site] | None = None) -> None:
-        super().__init__()
+    def __init__(self, api: Api, sites: list[Site] | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
         self.api = api
         self.sites = sites  # None: load them first
+        self.started = False  # loaded once already
         self.entries: dict[str, list[SearchEntry]] = {}  # by site
         self.sites_total = 0
         self.sites_done = 0
@@ -95,7 +94,6 @@ class SearchScreen(Screen):
     # The screen.
 
     def compose(self) -> ComposeResult:
-        yield Header()
         with Horizontal():
             with VerticalScroll(id="form") as form:
                 form.border_title = "requirements"
@@ -112,12 +110,16 @@ class SearchScreen(Screen):
             table.border_subtitle = "$ " + self.api.command("/sites/{site}/clusters") + " and …/{cluster}/nodes, every site"
             yield table
         yield Static("", id="status", markup=False)
-        yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#results", DataTable).add_columns(*COLUMNS)
         self.refresh_results()
-        self.load()
+
+    def activate(self) -> None:
+        """The tab is shown: load every site, the first time."""
+        if not self.started:
+            self.started = True
+            self.load()
 
     def action_reload(self) -> None:
         self.load()
@@ -136,6 +138,8 @@ class SearchScreen(Screen):
             self.set_status(f"error: {e}", error=True)
             return
         self.sites_total, self.sites_done = len(sites), 0
+        results = self.query_one("#results", DataTable)
+        results.loading = True  # until the first site arrives
         self.refresh_results()
         for done in asyncio.as_completed([self.index_site(s.uid) for s in sites]):
             site, entries, error = await done
@@ -144,6 +148,7 @@ class SearchScreen(Screen):
             else:
                 self.entries[site] = entries
             self.sites_done += 1
+            results.loading = False
             self.refresh_choices()
             self.refresh_results()
         if self.errors:
@@ -232,11 +237,11 @@ class SearchScreen(Screen):
             table.move_cursor(row=min(row, len(self.matches) - 1))
 
     def on_data_table_row_selected(self, _: DataTable.RowSelected) -> None:
-        """enter (or a click) on a result opens its detail."""
+        """enter (or a click) on a result opens it in Nodes."""
         table = self.query_one("#results", DataTable)
         if self.matches and 0 <= table.cursor_row < len(self.matches):
             e = self.matches[table.cursor_row]
-            self.app.push_screen(ClusterDetailScreen(self.api, Site(e.site), e.cluster))
+            self.post_message(ClusterChosen(Site(e.site), e.cluster))
 
     def set_status(self, text: str, *, error: bool = False) -> None:
         status = self.query_one("#status", Static)

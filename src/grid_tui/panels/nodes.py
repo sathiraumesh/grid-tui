@@ -1,5 +1,6 @@
-"""One cluster in detail: what its nodes are made of, then every node (a
-machine) with what it does now. esc goes back to the clusters.
+"""Nodes: the cluster chosen in Clusters, in detail. What its nodes are made
+of, then every node (a machine) with what it does now. enter (or a click,
+or g) on a node opens the reservations, on that node.
 
     ╭─ site: nancy · cluster: gros ──────────────────────────────────────╮
     │  MODEL      Dell PowerEdge R640                                     │
@@ -24,81 +25,103 @@ from collections import Counter
 from datetime import datetime
 
 from rich.markup import escape
-from textual import work
+from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Header, Static
+from textual.containers import Vertical
+from textual.widgets import DataTable, Static
 
+from grid_tui.api import Api
 from grid_tui.format import clock, duration
 from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Node, Reservation, Site
-from grid_tui.screens.base import Api
-from grid_tui.screens.reservations import ReservationsScreen
+from grid_tui.panels.messages import NodeChosen
 
 
-class ClusterDetailScreen(Screen):
-    """The detail of one cluster of a site."""
+class NodesPanel(Vertical):
+    """One cluster in detail: its hardware and its nodes."""
 
     BINDINGS = [
-        Binding("escape,backspace", "app.pop_screen", "Clusters"),
         Binding("g", "reservations", "Reservations"),
         Binding("r", "reload", "Reload"),
-        Binding("q", "app.quit", "Quit"),
     ]
 
     DEFAULT_CSS = """
-    ClusterDetailScreen #detail, ClusterDetailScreen #nodes {
+    NodesPanel #detail, NodesPanel #nodes {
         border: round $accent;
         border-title-color: $text;
         border-subtitle-color: $text-muted;
     }
-    ClusterDetailScreen #detail { height: auto; padding: 0 1; }
-    ClusterDetailScreen #nodes { height: 1fr; }
-    ClusterDetailScreen #status { height: 1; padding: 0 1; color: $text-muted; }
-    ClusterDetailScreen #status.error { color: $error; text-style: bold; }
+    NodesPanel #detail { height: auto; padding: 0 1; }
+    NodesPanel #nodes { height: 1fr; }
+    NodesPanel .status { height: 1; padding: 0 1; color: $text-muted; }
+    NodesPanel .status.error { color: $error; text-style: bold; }
     """
 
-    def __init__(self, api: Api, site: Site, cluster: Cluster) -> None:
-        super().__init__()
-        self.api, self.site, self.cluster = api, site, cluster
+    def __init__(self, api: Api, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.api = api
+        self.site: Site | None = None
+        self.cluster: Cluster | None = None
         self.hardware: Hardware | None = None  # None while loading
         self.nodes: list[Node] = []
         self.loaded_at: datetime | None = None  # when the nodes were loaded: what "now" means
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        detail = Static(self.text(), id="detail")
-        detail.border_title = f"site: {self.site.uid} · cluster: {self.cluster.uid}"
-        detail.border_subtitle = "$ " + self.api.command(
-            f"/sites/{self.site.uid}/clusters/{self.cluster.uid}/nodes"
-        )
-        yield detail
-        nodes: DataTable = DataTable(id="nodes", cursor_type="row", zebra_stripes=True)
-        nodes.border_title = "nodes: loading"
-        nodes.border_subtitle = "$ " + self.api.command(
-            f"/sites/{self.site.uid}/clusters/{self.cluster.uid}/status"
-        )
-        yield nodes
-        yield Static("", id="status", markup=False)  # an error's [ ] aren't styling
-        yield Footer()
+        yield Static("", id="detail")
+        yield DataTable(id="nodes", cursor_type="row", zebra_stripes=True)
+        yield Static("", classes="status", markup=False)  # an error's [ ] aren't styling
 
     def on_mount(self) -> None:
         self.query_one("#nodes", DataTable).add_columns("NODE", "STATE", "NOW", "JOB")
+        self.refresh_titles()
+        self.set_status("choose a cluster in Clusters (2)")
+
+    def show_cluster(self, site: Site, cluster: Cluster) -> None:
+        """Show cluster in detail (loaded again only for another cluster)."""
+        if (self.site, self.cluster) == (site, cluster) and self.nodes:
+            return
+        self.site, self.cluster = site, cluster
+        self.hardware, self.nodes = None, []
+        self.query_one("#nodes", DataTable).clear()
+        self.refresh_titles()
         self.load()
 
+    def refresh_titles(self) -> None:
+        detail = self.query_one("#detail", Static)
+        table = self.query_one("#nodes", DataTable)
+        if self.cluster is None or self.site is None:
+            detail.border_title, detail.border_subtitle = "nodes", ""
+            detail.update("")
+            table.border_title, table.border_subtitle = "", ""
+            return
+        detail.border_title = f"site: {self.site.uid} · cluster: {self.cluster.uid}"
+        detail.border_subtitle = "$ " + self.api.command(f"/sites/{self.site.uid}/clusters/{self.cluster.uid}/nodes")
+        detail.update(self.text())
+        if not self.nodes:
+            table.border_title = "nodes: loading"
+        table.border_subtitle = "$ " + self.api.command(f"/sites/{self.site.uid}/clusters/{self.cluster.uid}/status")
+
     def action_reload(self) -> None:
-        self.load()
+        if self.cluster is not None:
+            self.load()
 
     @work(exclusive=True)  # a reload replaces a load still on its way
     async def load(self) -> None:
         """Load the hardware and the nodes at the same time, in the
         background, then show what came back."""
+        site, cluster = self.site, self.cluster
+        assert site is not None and cluster is not None
         self.set_status("loading…")
-        hardware, nodes = await asyncio.gather(
-            self.api.hardware(self.site.uid, self.cluster.uid),
-            self.api.nodes(self.site.uid, self.cluster.uid),
-            return_exceptions=True,  # one failing doesn't lose the other
-        )
+        table = self.query_one("#nodes", DataTable)
+        table.loading = True
+        try:
+            hardware, nodes = await asyncio.gather(
+                self.api.hardware(site.uid, cluster.uid),
+                self.api.nodes(site.uid, cluster.uid),
+                return_exceptions=True,  # one failing doesn't lose the other
+            )
+        finally:
+            table.loading = False
         errors = [e for e in (hardware, nodes) if isinstance(e, BaseException)]
         if not isinstance(hardware, BaseException):
             self.hardware = hardware
@@ -127,7 +150,7 @@ class ClusterDetailScreen(Screen):
             table.move_cursor(row=min(row, len(nodes) - 1))
 
     def set_status(self, text: str, *, error: bool = False) -> None:
-        status = self.query_one("#status", Static)
+        status = self.query_one(".status", Static)
         status.update(text)
         status.set_class(error, "error")
 
@@ -135,6 +158,7 @@ class ClusterDetailScreen(Screen):
         """The detail as (label, value) pairs; the hardware's say "loading"
         until it is there."""
         c, hw = self.cluster, self.hardware
+        assert c is not None
         known = [
             ("MODEL", c.model or "-"),
             ("QUEUES", ", ".join(c.queues) or "-"),
@@ -157,20 +181,21 @@ class ClusterDetailScreen(Screen):
 
     def text(self) -> str:
         """The detail as text: a bold label, then its value."""
+        if self.cluster is None:
+            return ""
         width = max(len(label) for label, _ in self.lines())
         return "\n".join(f"[b]{label:<{width}}[/b]  {escape(value)}" for label, value in self.lines())
 
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+    @on(DataTable.RowSelected)
+    def chosen(self) -> None:
         """enter (or a click) on a node opens the reservations, on that node."""
         self.action_reservations()
 
     def action_reservations(self) -> None:
-        """The reservations of the cluster, with the nodes loaded here."""
-        if not self.nodes:
+        if not self.nodes or self.site is None or self.cluster is None:
             return  # nothing loaded yet
         row = self.query_one("#nodes", DataTable).cursor_row
-        self.app.push_screen(ReservationsScreen(self.api, self.site, self.cluster, self.nodes, node=row))
+        self.post_message(NodeChosen(self.site, self.cluster, self.nodes, row))
 
 
 # How a node's job reads.

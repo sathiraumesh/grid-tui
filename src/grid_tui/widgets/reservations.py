@@ -9,8 +9,9 @@ from grid_tui.models import Gantt
 from grid_tui.widgets.timeline import draw, window
 
 
-class ReservationsView(Widget):
-    """A cluster's reservations: the time line, the week or the month."""
+class ReservationsView(Widget, can_focus=True):
+    """A cluster's reservations: the time line, the week or the month. It
+    takes the focus, so the panel's keys reach it."""
 
     DEFAULT_CSS = """
     ReservationsView { height: 1fr; }

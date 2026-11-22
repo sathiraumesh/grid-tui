@@ -1,21 +1,12 @@
-"""The app's screens, one per file.
+"""The app's screens.
 
-    sites.py      the list of sites; a click (or enter) opens its clusters
-    clusters.py   the clusters of a site; a click opens one; esc goes back
-    cluster.py    one cluster in detail: its hardware and its nodes; esc goes back
-    search.py     the clusters of every site that meet a form of requirements
-    reservations.py  a cluster's reservations: a time line, a week, a month
-    reserve.py    its dialogs: reserving by choosing, confirming a cancel
-    reservable.py which clusters can take a reservation for a date and time
-    base.py       what the lists share: a table loaded in the background
+    main.py      the main screen: the panels (grid_tui.panels) as tabs
+    reserve.py   the dialogs over it: reserving by choosing, confirming a cancel
+    splash.py    the start-up screen, until the sites have loaded
 """
 
-from grid_tui.screens.base import Api, ListScreen
-from grid_tui.screens.cluster import ClusterDetailScreen
-from grid_tui.screens.clusters import ClustersScreen
-from grid_tui.screens.reservable import ReservableScreen
-from grid_tui.screens.reservations import ReservationsScreen
-from grid_tui.screens.search import SearchScreen
-from grid_tui.screens.sites import SitesScreen
+from grid_tui.screens.main import MainScreen
+from grid_tui.screens.reserve import ConfirmDialog, ReserveDialog
+from grid_tui.screens.splash import SplashScreen
 
-__all__ = ["Api", "ClusterDetailScreen", "ClustersScreen", "ListScreen", "ReservableScreen", "ReservationsScreen", "SearchScreen", "SitesScreen"]
+__all__ = ["ConfirmDialog", "MainScreen", "ReserveDialog", "SplashScreen"]
