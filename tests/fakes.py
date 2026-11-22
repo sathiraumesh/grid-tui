@@ -4,11 +4,12 @@ read what is on screen."""
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 
 from textual.widgets import DataTable, Static
 
 from grid_tui.app import GridTUI
-from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Site
+from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Node, Reservation, Site
 
 TWO_SITES = [Site("nancy", "Nancy", "Grid5000 Nancy site"), Site("rennes", "Rennes", "Grid5000 Rennes site")]
 
@@ -36,6 +37,16 @@ GPU_NODE = Hardware(nodes=2, cpu="AMD EPYC 7452", sockets=2, cores=64, memory=51
                     gpus=(GPU("Nvidia", "A100", 40 * 2**30),) * 4)
 
 
+def gros_nodes(now: datetime) -> list[Node]:
+    """gros-1 free with eve's job later; gros-2 running bob's job; gros-10 dead."""
+    hour = timedelta(hours=1)
+    return [
+        Node("gros-1", "alive", "free", (Reservation(4600, now + 3 * hour, now + 4 * hour, "eve", "default", "Waiting"),)),
+        Node("gros-2", "alive", "busy", (Reservation(4521, now - hour, now + 2 * hour, "bob", "default", "Running"),)),
+        Node("gros-10", "dead", "unknown"),
+    ]
+
+
 class FakeClient:
     """Answers with sites, or raises error; calls counts the loads."""
 
@@ -45,6 +56,7 @@ class FakeClient:
         self.clusters_error: Exception | None = None
         self.hardware_error: Exception | None = None
         self.hardware_gate: asyncio.Event | None = None
+        self.nodes_error: Exception | None = None
 
     async def sites(self) -> list[Site]:
         self.calls += 1
@@ -67,6 +79,12 @@ class FakeClient:
         if self.hardware_error is not None:
             raise self.hardware_error
         return {"gros": GROS, "graffiti": GPU_NODE}.get(cluster, Hardware())
+
+    async def nodes(self, site: str, cluster: str) -> list[Node]:
+        self.calls += 1
+        if self.nodes_error is not None:
+            raise self.nodes_error
+        return gros_nodes(datetime.now().astimezone()) if cluster == "gros" else []
 
     def command(self, path: str) -> str:
         return "curl https://api.test" + path

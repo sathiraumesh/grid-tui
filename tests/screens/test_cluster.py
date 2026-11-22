@@ -5,9 +5,13 @@ from __future__ import annotations
 import asyncio
 
 from grid_tui.app import GridTUI
-from grid_tui.models import GPU, NIC, Disk, Hardware
+from datetime import datetime, timedelta
+
+from textual.widgets import DataTable
+
+from grid_tui.models import GPU, NIC, Disk, Hardware, Reservation
 from grid_tui.screens import ClusterDetailScreen, ClustersScreen, SitesScreen
-from grid_tui.screens.cluster import cpu, disk, gb, gib, gpus, joined, nic
+from grid_tui.screens.cluster import cpu, disk, gb, gib, gpus, job_text, joined, nic
 from tests.fakes import TWO_SITES, FakeClient, detail, open_gros, status
 
 
@@ -109,3 +113,67 @@ def test_hardware_text() -> None:
     assert disk(Disk("HDD", "", 2 * 10**12)) == "2 TB HDD"
     assert nic(NIC("InfiniBand", 100 * 10**9)) == "100 Gbps InfiniBand"
     assert joined(["", "a", "", "b"]) == "a · b" and joined([]) == "-"
+
+
+
+# The nodes: the machines of the cluster.
+
+
+def node_rows(app: GridTUI) -> list[list[str]]:
+    table = app.screen.query_one("#nodes", DataTable)
+    return [[str(c) for c in table.get_row_at(i)] for i in range(table.row_count)]
+
+
+async def test_detail_shows_the_nodes() -> None:
+    app = GridTUI(FakeClient(TWO_SITES))
+    async with app.run_test(size=(140, 40)) as pilot:
+        await open_gros(pilot)
+        rows = node_rows(app)
+        assert [r[:3] for r in rows] == [
+            ["gros-1", "alive/free", "free"],
+            ["gros-2", "alive/busy", "busy"],
+            ["gros-10", "dead/unknown", "down"],
+        ]
+        assert rows[0][3].startswith("next #4600 eve ") and rows[0][3].endswith("(1h)")
+        assert rows[1][3].startswith("#4521 bob ") and rows[1][3].endswith("(3h) Running")
+        assert rows[2][3] == ""
+        table = app.screen.query_one("#nodes", DataTable)
+        assert table.border_title == "nodes: 3 · free 1 · busy 1 · down 1"
+        assert table.border_subtitle == "$ curl https://api.test/sites/nancy/clusters/gros/status"
+
+
+async def test_the_nodes_table_takes_the_keys() -> None:
+    app = GridTUI(FakeClient(TWO_SITES))
+    async with app.run_test(size=(140, 40)) as pilot:
+        await open_gros(pilot)
+        await pilot.press("down", "down")
+        assert app.screen.query_one("#nodes", DataTable).cursor_row == 2
+        assert app.screen.nodes[2].name == "gros-10"
+
+
+async def test_one_part_failing_keeps_the_other() -> None:
+    client = FakeClient(TWO_SITES)
+    client.nodes_error = RuntimeError("GET /sites/nancy/clusters/gros/status: 500")
+    app = GridTUI(client)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await open_gros(pilot)
+        assert "Intel Xeon Gold 5220" in detail(app)  # the hardware still shows
+        assert node_rows(app) == []
+        assert status(app) == "error: GET /sites/nancy/clusters/gros/status: 500"
+        client.nodes_error = None
+        await pilot.press("r")
+        await pilot.pause()
+        assert len(node_rows(app)) == 3
+        assert status(app) == ""
+
+
+def test_job_text() -> None:
+    now = datetime(2026, 11, 22, 14, 30).astimezone()
+    h = timedelta(hours=1)
+    assert job_text(Reservation(1, now - h, now + h, "a", "default", "Running"), now) == "#1 a 13:30→15:30 (2h) Running"
+    assert job_text(Reservation(2, now + h, now + 2.5 * h, "b"), now) == "next #2 b 15:30→17:00 (1h30m)"
+    assert job_text(Reservation(3, now + 20 * h, now + 21 * h, "c"), now) == "next #3 c Mon 23 10:30→Mon 23 11:30 (1h)"
+    assert job_text(Reservation(4, now - h, now + 0.75 * h, "d", "besteffort", "Running"), now) == (
+        "#4 d 13:30→15:15 (1h45m) besteffort Running"
+    )
+    assert job_text(None, now) == ""

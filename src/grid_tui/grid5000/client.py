@@ -12,12 +12,13 @@ Lists come wrapped as {"items": [...], "total": n, "offset": 0}.
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
-from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Site
+from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Node, Reservation, Site, node_order
 
 DEFAULT_BASE_URL = "https://api.grid5000.fr/stable"
 SITES_PATH = "/sites"
@@ -136,6 +137,46 @@ class Client:
                 for g in each(n, "gpu_devices")
             ),
         )
+
+
+    async def nodes(self, site: str, cluster: str) -> list[Node]:
+        """The nodes of a cluster with their jobs: GET …/clusters/{cluster}/status.
+
+        The answer is {"nodes": {"gros-12.nancy.grid5000.fr": {"hard": …,
+        "soft": …, "reservations": [{"uid", "user", "queue", "state",
+        "walltime" (seconds), "started_at" / "scheduled_at" (UNIX time)}]}}}.
+        A job not scheduled yet (no start time) is left out.
+        """
+        if not site or not cluster:
+            raise ValueError("nodes: a site and a cluster are needed")
+        data = await self._get(f"{clusters_path(site)}/{quote(cluster, safe='')}/status")
+        found = dig(data, "nodes", default={})
+        if not isinstance(found, dict):
+            return []
+        nodes = []
+        for fqdn, n in found.items():
+            if not isinstance(n, dict):
+                continue
+            jobs = []
+            for r in each(n, "reservations"):
+                start, walltime = num(r, "started_at") or num(r, "scheduled_at"), num(r, "walltime")
+                if start <= 0 or walltime <= 0:
+                    continue  # not scheduled yet
+                jobs.append(Reservation(
+                    job_id=int(num(r, "uid")),
+                    start=datetime.fromtimestamp(start).astimezone(),
+                    end=datetime.fromtimestamp(start + walltime).astimezone(),
+                    user=text(r, "user"),
+                    queue=text(r, "queue"),
+                    state=text(r, "state"),
+                ))
+            nodes.append(Node(
+                name=str(fqdn).split(".", 1)[0],  # gros-12.nancy.grid5000.fr → gros-12
+                hard=text(n, "hard"),
+                soft=text(n, "soft"),
+                reservations=tuple(sorted(jobs, key=lambda j: j.start)),
+            ))
+        return sorted(nodes, key=node_order)
 
 
 # Reading the API's JSON safely: each of these returns a default when a key

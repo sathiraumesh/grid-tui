@@ -1,35 +1,36 @@
-"""One cluster in detail: what its nodes are made of. esc goes back to the
-clusters.
+"""One cluster in detail: what its nodes are made of, then every node (a
+machine) with what it does now. esc goes back to the clusters.
 
     ╭─ site: nancy · cluster: gros ──────────────────────────────────────╮
-    │                                                                     │
     │  MODEL      Dell PowerEdge R640                                     │
-    │  QUEUES     default, admin                                          │
-    │  NODES      124                                                     │
     │  CPU        1 × Intel Xeon Gold 5220 · 18 cores · 36 threads · 2.2 GHz
-    │  MEMORY     96 GiB                                                  │
-    │  STORAGE    480 GB SSD SATA · 960 GB SSD SATA                       │
-    │  NETWORK    25 Gbps Ethernet                                        │
-    │  GPU        -                                                       │
-    │  WATTMETER  yes                                                     │
-    │  METRICS    wattmetre_power_watt, bmc_node_power_watt               │
-    ╰─ $ curl https://api.grid5000.fr/stable/sites/nancy/clusters/gros/nodes ╯
+    │  …                                                                  │
+    ╰─ $ curl …/sites/nancy/clusters/gros/nodes ─────────────────────────╯
+    ╭─ nodes: 3 · free 1 · busy 1 · down 1 ──────────────────────────────╮
+    │ NODE      STATE          NOW    JOB                                 │
+    │ gros-1    alive/free     free   next #4600 eve 18:00→19:00 (1h)     │
+    │ gros-2    alive/busy     busy   #4521 bob 13:30→16:30 (3h) Running  │
+    │ gros-10   dead/unknown   down                                       │
+    ╰─ $ curl …/sites/nancy/clusters/gros/status ────────────────────────╯
 
-The hardware loads in the background; its lines say "loading" until then.
+The hardware and the nodes load at the same time, in the background; a
+part that fails shows its error, and the other part still shows.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
+from datetime import datetime, timedelta
 
 from rich.markup import escape
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static
+from textual.widgets import DataTable, Footer, Header, Static
 
-from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Site
+from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Node, Reservation, Site
 from grid_tui.screens.base import Api
 
 
@@ -43,13 +44,13 @@ class ClusterDetailScreen(Screen):
     ]
 
     DEFAULT_CSS = """
-    ClusterDetailScreen #detail {
-        height: 1fr;
+    ClusterDetailScreen #detail, ClusterDetailScreen #nodes {
         border: round $accent;
         border-title-color: $text;
         border-subtitle-color: $text-muted;
-        padding: 1 2;
     }
+    ClusterDetailScreen #detail { height: auto; padding: 0 1; }
+    ClusterDetailScreen #nodes { height: 1fr; }
     ClusterDetailScreen #status { height: 1; padding: 0 1; color: $text-muted; }
     ClusterDetailScreen #status.error { color: $error; text-style: bold; }
     """
@@ -58,6 +59,8 @@ class ClusterDetailScreen(Screen):
         super().__init__()
         self.api, self.site, self.cluster = api, site, cluster
         self.hardware: Hardware | None = None  # None while loading
+        self.nodes: list[Node] = []
+        self.loaded_at: datetime | None = None  # when the nodes were loaded: what "now" means
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -67,10 +70,17 @@ class ClusterDetailScreen(Screen):
             f"/sites/{self.site.uid}/clusters/{self.cluster.uid}/nodes"
         )
         yield detail
+        nodes: DataTable = DataTable(id="nodes", cursor_type="row", zebra_stripes=True)
+        nodes.border_title = "nodes: loading"
+        nodes.border_subtitle = "$ " + self.api.command(
+            f"/sites/{self.site.uid}/clusters/{self.cluster.uid}/status"
+        )
+        yield nodes
         yield Static("", id="status", markup=False)  # an error's [ ] aren't styling
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#nodes", DataTable).add_columns("NODE", "STATE", "NOW", "JOB")
         self.load()
 
     def action_reload(self) -> None:
@@ -78,16 +88,40 @@ class ClusterDetailScreen(Screen):
 
     @work(exclusive=True)  # a reload replaces a load still on its way
     async def load(self) -> None:
-        """Load the hardware in the background, then show it."""
+        """Load the hardware and the nodes at the same time, in the
+        background, then show what came back."""
         self.set_status("loading…")
-        try:
-            hardware = await self.api.hardware(self.site.uid, self.cluster.uid)
-        except Exception as e:  # the API's error, or no network
-            self.set_status(f"error: {e}", error=True)
-            return
-        self.hardware = hardware
-        self.query_one("#detail", Static).update(self.text())
-        self.set_status("")
+        hardware, nodes = await asyncio.gather(
+            self.api.hardware(self.site.uid, self.cluster.uid),
+            self.api.nodes(self.site.uid, self.cluster.uid),
+            return_exceptions=True,  # one failing doesn't lose the other
+        )
+        errors = [e for e in (hardware, nodes) if isinstance(e, BaseException)]
+        if not isinstance(hardware, BaseException):
+            self.hardware = hardware
+            self.query_one("#detail", Static).update(self.text())
+        if not isinstance(nodes, BaseException):
+            self.show_nodes(nodes, datetime.now().astimezone())
+        if errors:
+            self.set_status("error: " + "; ".join(str(e) for e in errors), error=True)
+        else:
+            self.set_status("")
+
+    def show_nodes(self, nodes: list[Node], at: datetime) -> None:
+        """Fill the nodes' table as they are at that moment, keeping the
+        cursor's row where it can."""
+        table = self.query_one("#nodes", DataTable)
+        row = table.cursor_row
+        self.nodes, self.loaded_at = nodes, at
+        table.clear()
+        for n in nodes:
+            table.add_row(n.name, f"{n.hard}/{n.soft}", n.now(at), job_text(n.job(at), at), key=n.name)
+        now = Counter(n.now(at) for n in nodes)
+        table.border_title = (
+            f"nodes: {len(nodes)} · free {now['free'] + now['besteffort']} · busy {now['busy']} · down {now['down']}"
+        )
+        if nodes:
+            table.move_cursor(row=min(row, len(nodes) - 1))
 
     def set_status(self, text: str, *, error: bool = False) -> None:
         status = self.query_one("#status", Static)
@@ -122,6 +156,38 @@ class ClusterDetailScreen(Screen):
         """The detail as text: a bold label, then its value."""
         width = max(len(label) for label, _ in self.lines())
         return "\n".join(f"[b]{label:<{width}}[/b]  {escape(value)}" for label, value in self.lines())
+
+
+# How a node's job reads.
+
+
+def job_text(r: Reservation | None, now: datetime) -> str:
+    """The job a node runs, or "next …" for one to come, e.g.
+    "#4521 bob 13:30→16:30 (3h) Running"; "" for none."""
+    if r is None:
+        return ""
+    text = f"#{r.job_id} {r.user or '-'} {clock(r.start, now)}→{clock(r.end, now)} ({duration(r.end - r.start)})"
+    if r.besteffort:
+        text += " besteffort"
+    if r.start > now:
+        return "next " + text
+    return f"{text} {r.state}".rstrip()
+
+
+def clock(t: datetime, now: datetime) -> str:
+    """t as "15:04", with the day when it isn't now's day: "Mon 23 09:00"."""
+    if t.date() == now.date():
+        return t.strftime("%H:%M")
+    return t.strftime("%a %d %H:%M")
+
+
+def duration(d: timedelta) -> str:
+    """d as "3h", "1h30m" or "45m"."""
+    minutes = round(d.total_seconds() / 60)
+    h, m = divmod(minutes, 60)
+    if h and m:
+        return f"{h}h{m}m"
+    return f"{h}h" if h else f"{m}m"
 
 
 # How the hardware reads.

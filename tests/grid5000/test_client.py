@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import httpx
 import pytest
 
@@ -208,3 +210,54 @@ def test_safe_readers() -> None:
     assert each(data, "l") == [{"k": 1}]
     assert each({"d": {"1": {"v": 2}, "0": {"v": 1}}}, "d") == [{"v": 1}, {"v": 2}]
     assert each(data, "a", "b") == []
+
+
+# The nodes of a cluster and their jobs: GET …/clusters/{cluster}/status.
+
+STATUS = {
+    "nodes": {
+        "gros-10.nancy.grid5000.fr": {"hard": "dead", "soft": "unknown", "reservations": []},
+        "gros-2.nancy.grid5000.fr": {
+            "hard": "alive",
+            "soft": "busy",
+            "reservations": [
+                {"uid": 4600, "user": "eve", "queue": "default", "state": "Waiting", "walltime": 3600,
+                 "started_at": None, "scheduled_at": 1800010000},
+                {"uid": 4521, "user": "bob", "queue": "default", "state": "Running", "walltime": 7200,
+                 "started_at": 1800000000, "scheduled_at": 1800000000},
+                {"uid": 4700, "user": "x", "walltime": 3600, "started_at": None, "scheduled_at": None},  # not scheduled
+            ],
+        },
+        "gros-1.nancy.grid5000.fr": {"hard": "alive", "soft": "free", "reservations": None},
+        "junk": "not a node",
+    },
+    "disks": {},
+}
+
+
+def status_api(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/stable/sites/nancy/clusters/gros/status":
+        return httpx.Response(200, json=STATUS)
+    return httpx.Response(404, json={"message": "unknown cluster"})
+
+
+async def test_nodes() -> None:
+    c = Client("https://api.test/stable", transport=httpx.MockTransport(status_api))
+    nodes = await c.nodes("nancy", "gros")
+    assert [n.name for n in nodes] == ["gros-1", "gros-2", "gros-10"]  # by number, junk left out
+    g1, g2, g10 = nodes
+    assert (g1.hard, g1.soft, g1.reservations) == ("alive", "free", ())
+    assert g10.hard == "dead"
+    assert [r.job_id for r in g2.reservations] == [4521, 4600]  # by start; the unscheduled one left out
+    running = g2.reservations[0]
+    assert running.start == datetime.fromtimestamp(1800000000).astimezone()
+    assert running.end - running.start == timedelta(hours=2)
+    assert (running.user, running.queue, running.state) == ("bob", "default", "Running")
+
+
+async def test_nodes_errors() -> None:
+    c = Client("https://api.test/stable", transport=httpx.MockTransport(status_api))
+    with pytest.raises(ApiError, match="404 Not Found: unknown cluster"):
+        await c.nodes("nancy", "atlantis")
+    with pytest.raises(ValueError):
+        await c.nodes("", "gros")

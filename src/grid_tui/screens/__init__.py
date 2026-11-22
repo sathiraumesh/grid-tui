@@ -2,7 +2,7 @@
 
     sites.py      the list of sites; a click (or enter) opens its clusters
     clusters.py   the clusters of a site; a click opens one; esc goes back
-    cluster.py    one cluster in detail: its hardware; esc goes back
+    cluster.py    one cluster in detail: its hardware and its nodes; esc goes back
     base.py       what the lists share: a table loaded in the background
 """
 
