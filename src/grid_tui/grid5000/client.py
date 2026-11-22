@@ -12,13 +12,15 @@ Lists come wrapped as {"items": [...], "total": n, "offset": 0}.
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
+from grid_tui.grid5000.jobs import job_spec, jobs_path, submit_command
 from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Node, Reservation, Site, node_order
+from grid_tui.models.job import JobRequest
 
 DEFAULT_BASE_URL = "https://api.grid5000.fr/stable"
 SITES_PATH = "/sites"
@@ -67,17 +69,51 @@ class Client:
         return f"curl {self.base_url}{path}"
 
     async def _get(self, path: str) -> Any:
+        return await self._request("GET", path)
+
+    async def _request(self, method: str, path: str, body: Any = None) -> Any:
+        """Call method path (with body as JSON) and return the JSON answer,
+        or None if there is none."""
         auth = httpx.BasicAuth(self.user, self.password) if self.user else None
         async with httpx.AsyncClient(
             base_url=self.base_url, auth=auth, timeout=self._timeout, transport=self._transport
         ) as http:
-            response = await http.get(path, headers={"Accept": "application/json"})
+            response = await http.request(method, path, json=body, headers={"Accept": "application/json"})
         if not response.is_success:
-            raise ApiError("GET", path, response.status_code, _detail(response))
+            raise ApiError(method, path, response.status_code, _detail(response))
+        if not response.content:
+            return None
         try:
             return response.json()
         except ValueError as e:
-            raise ApiError("GET", path, response.status_code, f"reading the answer: {e}") from e
+            if method != "GET":
+                return None  # the job was made; the answer just isn't JSON
+            raise ApiError(method, path, response.status_code, f"reading the answer: {e}") from e
+
+    # Reserving and cancelling (see jobs.py).
+
+    def login(self) -> str:
+        """Who the jobs are made as: G5K_USER, or on a frontend the system's user."""
+        return self.user or os.environ.get("USER", "")
+
+    def submit_command(self, r: JobRequest) -> str:
+        return submit_command(self.base_url, r)
+
+    async def submit_job(self, r: JobRequest) -> int:
+        """Ask OAR for the reservation r; the new job's number."""
+        if not r.site or not r.cluster or r.nodes < 1 or r.walltime <= timedelta(0):
+            raise ValueError("submit: a site, a cluster, nodes and a walltime are needed")
+        answer = await self._request("POST", jobs_path(r.site), job_spec(r))
+        job_id = int(num(answer, "uid"))
+        if job_id <= 0:
+            raise ValueError("submit: the answer has no job number")
+        return job_id
+
+    async def cancel_job(self, site: str, job_id: int) -> None:
+        """Cancel job job_id of site."""
+        if not site or job_id <= 0:
+            raise ValueError("cancel: a site and a job are needed")
+        await self._request("DELETE", f"{jobs_path(site)}/{job_id}")
 
     async def sites(self) -> list[Site]:
         """Every Grid'5000 site: GET /stable/sites."""
@@ -150,33 +186,14 @@ class Client:
         if not site or not cluster:
             raise ValueError("nodes: a site and a cluster are needed")
         data = await self._get(f"{clusters_path(site)}/{quote(cluster, safe='')}/status")
-        found = dig(data, "nodes", default={})
-        if not isinstance(found, dict):
-            return []
-        nodes = []
-        for fqdn, n in found.items():
-            if not isinstance(n, dict):
-                continue
-            jobs = []
-            for r in each(n, "reservations"):
-                start, walltime = num(r, "started_at") or num(r, "scheduled_at"), num(r, "walltime")
-                if start <= 0 or walltime <= 0:
-                    continue  # not scheduled yet
-                jobs.append(Reservation(
-                    job_id=int(num(r, "uid")),
-                    start=datetime.fromtimestamp(start).astimezone(),
-                    end=datetime.fromtimestamp(start + walltime).astimezone(),
-                    user=text(r, "user"),
-                    queue=text(r, "queue"),
-                    state=text(r, "state"),
-                ))
-            nodes.append(Node(
-                name=str(fqdn).split(".", 1)[0],  # gros-12.nancy.grid5000.fr → gros-12
-                hard=text(n, "hard"),
-                soft=text(n, "soft"),
-                reservations=tuple(sorted(jobs, key=lambda j: j.start)),
-            ))
-        return sorted(nodes, key=node_order)
+        return parse_status(data)
+
+    async def site_nodes(self, site: str) -> list[Node]:
+        """Every node of a site with its jobs, in one call: GET /sites/{site}/status.
+        The answer has the same shape as a cluster's status."""
+        if not site:
+            raise ValueError("site nodes: no site given")
+        return parse_status(await self._get(f"{SITES_PATH}/{quote(site, safe='')}/status"))
 
 
 # Reading the API's JSON safely: each of these returns a default when a key
@@ -225,6 +242,37 @@ def each(obj: Any, *keys: str) -> list[dict]:
     if not isinstance(v, list):
         return []
     return [x for x in v if isinstance(x, dict)]
+
+
+def parse_status(data: Any) -> list[Node]:
+    """The nodes of a status answer, by name; jobs not scheduled yet are left out."""
+    found = dig(data, "nodes", default={})
+    if not isinstance(found, dict):
+        return []
+    nodes = []
+    for fqdn, n in found.items():
+        if not isinstance(n, dict):
+            continue
+        jobs = []
+        for r in each(n, "reservations"):
+            start, walltime = num(r, "started_at") or num(r, "scheduled_at"), num(r, "walltime")
+            if start <= 0 or walltime <= 0:
+                continue  # not scheduled yet
+            jobs.append(Reservation(
+                job_id=int(num(r, "uid")),
+                start=datetime.fromtimestamp(start).astimezone(),
+                end=datetime.fromtimestamp(start + walltime).astimezone(),
+                user=text(r, "user"),
+                queue=text(r, "queue"),
+                state=text(r, "state"),
+            ))
+        nodes.append(Node(
+            name=str(fqdn).split(".", 1)[0],  # gros-12.nancy.grid5000.fr → gros-12
+            hard=text(n, "hard"),
+            soft=text(n, "soft"),
+            reservations=tuple(sorted(jobs, key=lambda j: j.start)),
+        ))
+    return sorted(nodes, key=node_order)
 
 
 def clusters_path(site: str) -> str:

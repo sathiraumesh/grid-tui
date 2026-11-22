@@ -130,3 +130,35 @@ async def test_reload_keeps_the_view_and_cursors() -> None:
         g = screen.gantt
         assert (g.col, g.zoom, g.node) == (col, zoom, node)
         assert client.calls > 0
+
+
+class Wheel:
+    """A mouse wheel event, as the screen reads it."""
+
+    def __init__(self, shift: bool = False) -> None:
+        self.shift = shift
+
+    def stop(self) -> None:
+        pass
+
+
+async def test_the_mouse_wheel_scrolls_both_ways() -> None:
+    app = GridTUI(FakeClient(TWO_SITES))
+    async with app.run_test(size=SIZE) as pilot:
+        screen = await open_from_the_detail(pilot)  # gros-2, the cursor on now
+        g = screen.gantt
+        node, col = g.node, g.col
+        screen.on_mouse_scroll_down(Wheel())
+        assert g.node == node + 1 and g.col == col  # the wheel: the nodes
+        screen.on_mouse_scroll_up(Wheel())
+        assert g.node == node
+        screen.on_mouse_scroll_down(Wheel(shift=True))
+        assert g.col == col + 1  # shift+wheel: time
+        screen.on_mouse_scroll_right(Wheel())
+        screen.on_mouse_scroll_left(Wheel())
+        assert g.col == col + 1
+
+        await pilot.press("w")  # on the week: the wheel moves the slots
+        day = g.day
+        screen.on_mouse_scroll_down(Wheel())
+        assert g.day == day + timedelta(hours=2)

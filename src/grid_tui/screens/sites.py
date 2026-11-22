@@ -1,5 +1,5 @@
 """The list of Grid'5000 sites. Clicking one (or enter) opens its clusters;
-/ opens the search.
+/ opens the search, a what is reservable for a date and time.
 
     ╭─ sites: 2 ───────────────────────────────────────╮
     │ SITE     NAME     DESCRIPTION                     │
@@ -18,6 +18,7 @@ from textual.widgets import DataTable
 from grid_tui.models import Site
 from grid_tui.screens.base import ListScreen
 from grid_tui.screens.clusters import ClustersScreen
+from grid_tui.screens.reservable import ReservableScreen
 from grid_tui.screens.search import SearchScreen
 
 
@@ -28,6 +29,7 @@ class SitesScreen(ListScreen[Site]):
 
     BINDINGS = [
         Binding("slash", "search", "Search"),
+        Binding("a", "reservable", "Reservable"),
         *ListScreen.BINDINGS,
     ]
 
@@ -57,3 +59,10 @@ class SitesScreen(ListScreen[Site]):
         if not self.app.is_screen_installed("search"):
             self.app.install_screen(SearchScreen(self.api, self.items or None), "search")
         self.app.push_screen("search")
+
+    def action_reservable(self) -> None:
+        """Which clusters can take a reservation for a date and time. Made
+        once and kept, with what it loaded."""
+        if not self.app.is_screen_installed("reservable"):
+            self.app.install_screen(ReservableScreen(self.api, self.items or None), "reservable")
+        self.app.push_screen("reservable")

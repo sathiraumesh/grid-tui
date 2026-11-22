@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from textual.widgets import DataTable, Static
 
 from grid_tui.app import GridTUI
-from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Node, Reservation, Site
+from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, JobRequest, Node, Reservation, Site
 
 TWO_SITES = [Site("nancy", "Nancy", "Grid5000 Nancy site"), Site("rennes", "Rennes", "Grid5000 Rennes site")]
 
@@ -57,6 +57,9 @@ class FakeClient:
         self.hardware_error: Exception | None = None
         self.hardware_gate: asyncio.Event | None = None
         self.nodes_error: Exception | None = None
+        self.submitted: list[JobRequest] = []
+        self.cancelled: list[int] = []
+        self.jobs_error: Exception | None = None
 
     async def sites(self) -> list[Site]:
         self.calls += 1
@@ -85,6 +88,36 @@ class FakeClient:
         if self.nodes_error is not None:
             raise self.nodes_error
         return gros_nodes(datetime.now().astimezone()) if cluster == "gros" else []
+
+    async def submit_job(self, r: JobRequest) -> int:
+        self.calls += 1
+        if self.jobs_error is not None:
+            raise self.jobs_error
+        self.submitted.append(r)
+        return 4710
+
+    async def cancel_job(self, site: str, job_id: int) -> None:
+        self.calls += 1
+        if self.jobs_error is not None:
+            raise self.jobs_error
+        self.cancelled.append(job_id)
+
+    async def site_nodes(self, site: str) -> list[Node]:
+        """nancy: gros' nodes and two free graffiti; rennes: one free paravance."""
+        self.calls += 1
+        if self.nodes_error is not None:
+            raise self.nodes_error
+        free = lambda name: Node(name, "alive", "free")  # noqa: E731
+        return {
+            "nancy": gros_nodes(datetime.now().astimezone()) + [free("graffiti-1"), free("graffiti-2")],
+            "rennes": [free("paravance-1")],
+        }.get(site, [])
+
+    def submit_command(self, r: JobRequest) -> str:
+        return f"curl -X POST https://api.test/sites/{r.site}/jobs"
+
+    def login(self) -> str:
+        return "bob"  # gros-2's job 4521 is bob's
 
     def command(self, path: str) -> str:
         return "curl https://api.test" + path

@@ -5,14 +5,17 @@
     cluster.py    one cluster in detail: its hardware and its nodes; esc goes back
     search.py     the clusters of every site that meet a form of requirements
     reservations.py  a cluster's reservations: a time line, a week, a month
+    reserve.py    its dialogs: reserving by choosing, confirming a cancel
+    reservable.py which clusters can take a reservation for a date and time
     base.py       what the lists share: a table loaded in the background
 """
 
 from grid_tui.screens.base import Api, ListScreen
 from grid_tui.screens.cluster import ClusterDetailScreen
 from grid_tui.screens.clusters import ClustersScreen
+from grid_tui.screens.reservable import ReservableScreen
 from grid_tui.screens.reservations import ReservationsScreen
 from grid_tui.screens.search import SearchScreen
 from grid_tui.screens.sites import SitesScreen
 
-__all__ = ["Api", "ClusterDetailScreen", "ClustersScreen", "ListScreen", "ReservationsScreen", "SearchScreen", "SitesScreen"]
+__all__ = ["Api", "ClusterDetailScreen", "ClustersScreen", "ListScreen", "ReservableScreen", "ReservationsScreen", "SearchScreen", "SitesScreen"]

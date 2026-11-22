@@ -261,3 +261,17 @@ async def test_nodes_errors() -> None:
         await c.nodes("nancy", "atlantis")
     with pytest.raises(ValueError):
         await c.nodes("", "gros")
+
+
+async def test_site_nodes_is_one_call_for_the_whole_site() -> None:
+    seen = []
+
+    def api(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(200, json=STATUS)
+
+    nodes = await Client("https://api.test/stable", transport=httpx.MockTransport(api)).site_nodes("nancy")
+    assert seen == ["/stable/sites/nancy/status"]
+    assert [n.name for n in nodes] == ["gros-1", "gros-2", "gros-10"]
+    with pytest.raises(ValueError):
+        await Client().site_nodes("")

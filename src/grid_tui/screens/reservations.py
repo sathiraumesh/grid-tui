@@ -6,6 +6,10 @@ has) or from the clusters (g: it loads them). esc goes back.
     t w m   the time line, the week, the month (v: the next one)
     n       back to the time now
     r       load the nodes again (the zoom and the cursors are kept)
+    b       reserve from the cursor: a dialog to choose in (screens/reserve.py)
+    x       cancel your job under the cursor (time line), after a yes
+
+The mouse wheel moves as ↑↓ do, and shift+wheel (or a sideways wheel) as ←→.
 
 On the time line:  ↑↓ nodes · ←→ a cell · H L a day · [ ] previous / next job · + - zoom
 On the week:       ←→ days · ↑↓ 2-hour slots · [ ] weeks · enter: the time line there
@@ -17,18 +21,19 @@ marks move with the time, with no call to the API.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from textual import work
+from textual import events, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
-from grid_tui.format import duration
-from grid_tui.models import Cluster, Gantt, Mode, Node, Site
-from grid_tui.models.gantt import DAY
+from grid_tui.format import clock, duration
+from grid_tui.models import Cluster, Gantt, JobRequest, Mode, Node, Site
+from grid_tui.models.gantt import DAY, WEEK_SLOT
 from grid_tui.screens.base import Api
+from grid_tui.screens.reserve import ConfirmDialog, ReserveDialog
 from grid_tui.widgets import ReservationsView
 
 CLOCK_EVERY = 30.0  # seconds
@@ -48,6 +53,8 @@ class ReservationsScreen(Screen):
         Binding("m", "view('month')", "Month"),
         Binding("v", "next_view", "Next view", show=False),
         Binding("n", "now", "Now"),
+        Binding("b", "reserve", "Reserve"),
+        Binding("x", "cancel_job", "Cancel job"),
         Binding("r", "reload", "Reload"),
         Binding("q", "app.quit", "Quit"),
         Binding("up,k", "vertical(-1)", "Up", show=False),
@@ -142,6 +149,24 @@ class ReservationsScreen(Screen):
         self.view.border_title = title
         self.view.show(g)
 
+    # The mouse wheel: up and down like ↑↓, sideways (or with shift) like ←→.
+
+    def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
+        self.action_horizontal(1) if event.shift else self.action_vertical(1)
+        event.stop()
+
+    def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
+        self.action_horizontal(-1) if event.shift else self.action_vertical(-1)
+        event.stop()
+
+    def on_mouse_scroll_right(self, event: events.MouseScrollRight) -> None:
+        self.action_horizontal(1)
+        event.stop()
+
+    def on_mouse_scroll_left(self, event: events.MouseScrollLeft) -> None:
+        self.action_horizontal(-1)
+        event.stop()
+
     # Keys. Each one does what fits the view on screen.
 
     def change(self, f) -> None:
@@ -211,3 +236,66 @@ class ReservationsScreen(Screen):
                 return
             g.set_mode(Mode.TIMELINE)
         self.change(f)
+
+    # Reserving and cancelling.
+
+    def action_reserve(self) -> None:
+        """b: a dialog to reserve from the cursor's time (a week slot lasts 2h)."""
+        g = self.gantt
+        if g is None:
+            return
+        start = g.cursor_time if g.mode is Mode.TIMELINE else (g.day or g.now)
+        hours = int(WEEK_SLOT / timedelta(hours=1)) if g.mode is Mode.WEEK else 1
+        dialog = ReserveDialog(g, self.site.uid, self.cluster.uid, self.cluster.queues, start, hours,
+                               command=self.api.submit_command)
+        self.app.push_screen(dialog, self.reserve_chosen)
+
+    def reserve_chosen(self, request: JobRequest | None) -> None:
+        if request is not None:
+            self.submit(request)
+
+    @work(exclusive=True, group="jobs")
+    async def submit(self, request: JobRequest) -> None:
+        """Send the reservation, then load the nodes again to show it."""
+        self.set_status("sending the reservation…")
+        try:
+            job_id = await self.api.submit_job(request)
+        except Exception as e:
+            self.set_status(f"error: {e}", error=True)
+            self.notify(str(e), title="Not reserved", severity="error", timeout=10)
+            return
+        self.notify(f"job #{job_id}: {request.summary()}", title="Reserved")
+        self.set_status("")
+        self.load()
+
+    def action_cancel_job(self) -> None:
+        """x: cancel the job under the cursor, if it is yours, after a yes."""
+        g = self.gantt
+        if g is None:
+            return
+        if g.mode is not Mode.TIMELINE:
+            self.notify("put the time line's cursor on the job (t)", severity="warning")
+            return
+        job = g.selected_job()
+        if job is None:
+            self.notify("no job under the cursor", severity="warning")
+            return
+        if job.user != self.api.login():
+            self.notify(f"job #{job.job_id} is {job.user or 'someone else'}'s: only yours can be cancelled", severity="warning")
+            return
+        question = (f"Cancel job #{job.job_id} ({job.user}, {clock(job.start, g.now)}→{clock(job.end, g.now)}"
+                    f" on {g.job_nodes(job.job_id)} node(s))?")
+        self.app.push_screen(ConfirmDialog(question), lambda yes: self.cancel(job.job_id) if yes else None)
+
+    @work(exclusive=True, group="jobs")
+    async def cancel(self, job_id: int) -> None:
+        self.set_status(f"cancelling job #{job_id}…")
+        try:
+            await self.api.cancel_job(self.site.uid, job_id)
+        except Exception as e:
+            self.set_status(f"error: {e}", error=True)
+            self.notify(str(e), title="Not cancelled", severity="error", timeout=10)
+            return
+        self.notify(f"job #{job_id}", title="Cancelled")
+        self.set_status("")
+        self.load()
