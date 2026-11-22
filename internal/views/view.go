@@ -36,10 +36,17 @@ func For(m models.Model) View {
 }
 
 // HelpText is the key-hint line at the bottom of the screen.
-const HelpText = "q quit"
+const HelpText = "r reload • q quit"
 
 // emptyText is shown inside the panel while the view has no lines.
 const emptyText = "nothing to show yet"
+
+// Status is how the last load went, shown on the bottom line instead of
+// the help while there is something to say.
+type Status struct {
+	Loading bool  // a load is on its way
+	Err     error // the last load failed
+}
 
 // Render draws the whole screen for v, exactly width × height cells. v may
 // be nil: then the panel is empty.
@@ -47,13 +54,26 @@ const emptyText = "nothing to show yet"
 //	margin        panelMarginY rows
 //	panel         everything that's left
 //	margin        panelMarginY rows
-//	help line     1 row
-func Render(v View, width, height int) string {
+//	bottom line   1 row: the error, "loading…", or the help
+func Render(v View, status Status, width, height int) string {
 	if width == 0 {
 		return "loading..."
 	}
-	help := lipgloss.NewStyle().MaxWidth(width).Render(Help.Render(HelpText))
-	return lipgloss.JoinVertical(lipgloss.Left, panel(v, width, height), help)
+	// MaxWidth cuts the line at the terminal edge: a wrapped line would be
+	// an extra row and push the panel off the top.
+	bottom := lipgloss.NewStyle().MaxWidth(width).Render(bottomLine(status))
+	return lipgloss.JoinVertical(lipgloss.Left, panel(v, width, height), bottom)
+}
+
+// bottomLine is the error (red, with how to retry), "loading…", or the help.
+func bottomLine(s Status) string {
+	switch {
+	case s.Err != nil:
+		return ErrorText.Render("error: "+s.Err.Error()) + Help.Render(" • r retry • q quit")
+	case s.Loading:
+		return Help.Render("loading… • q quit")
+	}
+	return Help.Render(HelpText)
 }
 
 // ContentHeight is how many rows fit inside the panel: the terminal's

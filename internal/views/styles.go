@@ -21,6 +21,9 @@ var (
 	// Help is the key-hint line, and gray text in the panel and borders.
 	Help = lipgloss.NewStyle().Foreground(styles.Muted)
 
+	// ErrorText is a failed load on the bottom line.
+	ErrorText = lipgloss.NewStyle().Foreground(styles.StatusBad).Bold(true)
+
 	// label is a fixed label in the top border, e.g. "site: nancy".
 	label = lipgloss.NewStyle().Padding(0, 2).Foreground(styles.OnAccent).Background(styles.Off)
 

@@ -40,14 +40,14 @@ func TestSitesViewEmpty(t *testing.T) {
 	if v.Lines() != nil {
 		t.Errorf("no sites should have no lines, got %q", v.Lines())
 	}
-	s := Render(v, 100, 24)
+	s := Render(v, Status{}, 100, 24)
 	if !strings.Contains(s, "sites: 0") || !strings.Contains(s, emptyText) {
 		t.Errorf("empty sites:\n%s", s)
 	}
 }
 
 func TestSitesViewOnScreen(t *testing.T) {
-	s := Render(SitesView{Sites: sampleSites()}, 100, 24)
+	s := Render(SitesView{Sites: sampleSites()}, Status{}, 100, 24)
 	for _, want := range []string{"sites: 2", "SITE", "nancy    Nancy    Grid5000 Nancy site", "$ curl https://api.grid5000.fr/stable/sites"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen missing %q:\n%s", want, s)

@@ -5,7 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"grid-tui/internal/controllers"
-	"grid-tui/internal/models"
+	"grid-tui/internal/grid5000"
 )
 
 // App holds the controller Bubble Tea runs.
@@ -13,10 +13,11 @@ type App struct {
 	controller controllers.Controller
 }
 
-// New creates the App with its starting state: the list of sites, empty
-// until the Grid'5000 client loads them.
+// New creates the App: a controller that loads the sites from the
+// Grid'5000 API (credentials from G5K_USER and G5K_PASSWORD, see
+// grid5000.NewClient).
 func New() *App {
-	return &App{controller: controllers.New(models.NewSites(nil))}
+	return &App{controller: controllers.New(grid5000.NewClient())}
 }
 
 // Run starts the TUI full-screen and blocks until the user quits.
