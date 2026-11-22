@@ -2,7 +2,8 @@ import httpx
 import pytest
 
 from grid_tui.grid5000 import DEFAULT_BASE_URL, ApiError, Client
-from grid_tui.models import Site
+from grid_tui.grid5000.client import clusters_path
+from grid_tui.models import Cluster, Site
 
 SITES = {
     "total": 2,
@@ -69,3 +70,52 @@ def test_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_command() -> None:
     assert Client().command("/sites") == "curl https://api.grid5000.fr/stable/sites"
+
+
+CLUSTERS = {
+    "total": 2,
+    "offset": 0,
+    "items": [
+        {"uid": "graffiti", "model": "Dell PowerEdge T640", "queues": ["production", "admin"], "type": "cluster"},
+        {
+            "uid": "gros",
+            "model": "Dell PowerEdge R640",
+            "queues": ["default", "admin"],
+            "metrics": [
+                {"name": "wattmetre_power_watt", "period": 20, "source": {"protocol": "wattmetre"}},
+                {"name": "bmc_node_power_watt", "period": 5000},
+            ],
+        },
+    ],
+}
+
+
+def clusters_api(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/stable/sites/nancy/clusters":
+        return httpx.Response(200, json=CLUSTERS)
+    return httpx.Response(404, json={"message": "unknown site"})
+
+
+async def test_clusters() -> None:
+    c = Client("https://api.test/stable", transport=httpx.MockTransport(clusters_api))
+    graffiti, gros = await c.clusters("nancy")
+    assert graffiti == Cluster("graffiti", "Dell PowerEdge T640", ("production", "admin"))
+    assert gros.queues == ("default", "admin")
+    assert gros.metrics == ("wattmetre_power_watt", "bmc_node_power_watt")
+    assert gros.wattmeter and not graffiti.wattmeter
+
+
+async def test_clusters_unknown_site() -> None:
+    c = Client("https://api.test/stable", transport=httpx.MockTransport(clusters_api))
+    with pytest.raises(ApiError, match="GET /sites/atlantis/clusters: 404 Not Found: unknown site"):
+        await c.clusters("atlantis")
+
+
+async def test_clusters_needs_a_site() -> None:
+    with pytest.raises(ValueError):
+        await Client().clusters("")
+
+
+def test_clusters_path_is_escaped() -> None:
+    assert clusters_path("nancy") == "/sites/nancy/clusters"
+    assert clusters_path("a/b") == "/sites/a%2Fb/clusters"

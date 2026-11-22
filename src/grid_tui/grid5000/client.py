@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
-from grid_tui.models import Site
+from grid_tui.models import Cluster, Site
 
 DEFAULT_BASE_URL = "https://api.grid5000.fr/stable"
 SITES_PATH = "/sites"
@@ -84,6 +85,26 @@ class Client:
             Site(uid=item.get("uid", ""), name=item.get("name", ""), description=item.get("description", ""))
             for item in data.get("items", [])
         ]
+
+    async def clusters(self, site: str) -> list[Cluster]:
+        """The clusters of a site: GET /stable/sites/{site}/clusters."""
+        if not site:
+            raise ValueError("clusters: no site given")
+        data = await self._get(clusters_path(site))
+        return [
+            Cluster(
+                uid=item.get("uid", ""),
+                model=item.get("model") or "",
+                queues=tuple(item.get("queues") or ()),
+                metrics=tuple(m.get("name", "") for m in item.get("metrics") or () if isinstance(m, dict)),
+            )
+            for item in data.get("items", [])
+        ]
+
+
+def clusters_path(site: str) -> str:
+    """The API path of the clusters of site (escaped: a name can't change the path)."""
+    return f"{SITES_PATH}/{quote(site, safe='')}/clusters"
 
 
 def _detail(response: httpx.Response) -> str:

@@ -1,4 +1,4 @@
-"""The app's data. It knows nothing about the API or the screen."""
+"""A Grid'5000 site."""
 
 from dataclasses import dataclass
 
