@@ -194,9 +194,14 @@ func (v GanttView) selectedLine() string {
 	case !n.Usable():
 		return n.Name + " · down (" + n.Hard + ")"
 	case has:
-		text := fmt.Sprintf("%s · #%d %s · %s · %s · %s→%s (%s) · on %d nodes",
+		held := g.JobNodes(r.JobID)
+		nodes := fmt.Sprintf("on %d nodes", held)
+		if held == 1 {
+			nodes = "on 1 node"
+		}
+		text := fmt.Sprintf("%s · #%d %s · %s · %s · %s→%s (%s) · %s",
 			n.Name, r.JobID, orDash(r.User), orDash(r.Queue), orDash(r.State),
-			clock(r.Start, now), clock(r.End, now), duration(r.End.Sub(r.Start)), g.JobNodes(r.JobID))
+			clock(r.Start, now), clock(r.End, now), duration(r.End.Sub(r.Start)), nodes)
 		return selJob.Render(text)
 	}
 	from, to := g.FreeSpan(n)
@@ -210,7 +215,7 @@ func legend() string {
 	swatch := func(c lipgloss.Color) string { return lipgloss.NewStyle().Background(c).Render(" ") }
 	return swatch(jobColors[0]) + swatch(jobColors[1]) + swatch(jobColors[2]) + " jobs (a colour each)  " +
 		selJob.Render(" ") + " selected job  " + beStyle.Render("░") + " besteffort  " +
-		dimStyle.Render("·") + " free  " + nowStyle.Render("│") + " now  " + downCell.Render("×") + " down  ▲ cursor"
+		dimStyle.Render("·") + " free  " + nowStyle.Bold(true).Render("┃") + " now  " + downCell.Render("×") + " down  ▲ cursor"
 }
 
 // dayRow writes the day ("Mon 23") where each day starts.
@@ -356,19 +361,28 @@ func (v GanttView) nodeRow(n models.NodeStatus, first, end int, selID int64, sel
 			j++
 		}
 		if ids[i] >= 0 {
+			// The now line may cut the run in two: the number goes in the
+			// first part it fits in.
+			at, room := i, j-i
+			if n := nowCol - first; n >= i && n < j {
+				at, room = i, n-i
+				if room < len(strconv.FormatInt(ids[i], 10)) {
+					at, room = n+1, j-n-1
+				}
+			}
 			num := strconv.FormatInt(ids[i], 10)
 			label := []rune("#" + num)
-			if len(label) > j-i {
+			if len(label) > room {
 				label = []rune(num)
 			}
-			if len(label) <= j-i {
+			if len(label) <= room {
 				bg := colors[ids[i]]
 				text := lipgloss.NewStyle().Background(bg).Foreground(lipgloss.Color("#FFFFFF")).Bold(true)
 				if ids[i] == selID {
 					text = selJob
 				}
 				for k, ch := range label {
-					c := &cells[i+k]
+					c := &cells[at+k]
 					c.ch, c.key = string(ch), c.key+"label"
 					cur := c.style.GetReverse()
 					c.style = text.Reverse(cur)

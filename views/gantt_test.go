@@ -44,16 +44,17 @@ func row(t *testing.T, lines []string, name string) string {
 
 func TestGanttRows(t *testing.T) {
 	lines := GanttView{Gantt: sampleGantt()}.LinesFor(40)
-	// Cells from 14:00, an hour each: job 4521 14-17 (3 cells: too short
-	// for its number), free 17-18, job 4600 18-20, then free.
-	if got := row(t, lines, "gros-1"); !strings.HasPrefix(got, "███·██···") {
+	// Cells from 14:00, an hour each: the now line (14:30) in the first,
+	// job 4521 14-17 (3 cells: too short for its number), free 17-18,
+	// job 4600 18-20, then free.
+	if got := row(t, lines, "gros-1"); !strings.HasPrefix(got, "┃██·██···") {
 		t.Errorf("gros-1 = %q", got)
 	}
-	if got := row(t, lines, "gros-2"); !strings.HasPrefix(got, "░···██···") {
+	if got := row(t, lines, "gros-2"); !strings.HasPrefix(got, "┃···██···") {
 		t.Errorf("gros-2 = %q", got)
 	}
-	if got := row(t, lines, "gros-10"); strings.Trim(got, "×") != "" {
-		t.Errorf("a dead node is × all along: %q", got)
+	if got := row(t, lines, "gros-10"); !strings.HasPrefix(got, "┃") || strings.Trim(got[len("┃"):], "×") != "" {
+		t.Errorf("a dead node is × all along, the now line through it: %q", got)
 	}
 	for i, l := range lines {
 		if w := lipgloss.Width(l); w > 40 {
@@ -165,12 +166,35 @@ func TestJobColorsDifferForJobsNextToEachOther(t *testing.T) {
 }
 
 func TestGanttJobNumbersFitWhenZoomedIn(t *testing.T) {
-	g := sampleGantt().ZoomBy(-2) // 15 min: job 4521 is 8 cells from 14:30
-	if got := row(t, GanttView{Gantt: g}.LinesFor(60), "gros-1"); !strings.HasPrefix(got, "#4521███") {
-		t.Errorf("gros-1 at 15 min = %q", got)
+	g := sampleGantt().ZoomBy(-2) // 15 min: job 4521 is 8 cells from 14:30, now in the first
+	if got := row(t, GanttView{Gantt: g}.LinesFor(60), "gros-1"); !strings.HasPrefix(got, "┃#4521██") {
+		t.Errorf("gros-1 at 15 min: the number goes after the now line: %q", got)
 	}
-	g = sampleGantt().ZoomBy(-1) // 30 min: 4 cells, "4521" without the #
-	if got := row(t, GanttView{Gantt: g}.LinesFor(60), "gros-1"); !strings.HasPrefix(got, "4521") {
-		t.Errorf("gros-1 at 30 min = %q", got)
+	g = g.WithClock(now.Add(time.Hour)) // 15:30: 4 cells before the line, 3 after
+	if got := row(t, GanttView{Gantt: g}.LinesFor(60), "gros-1"); !strings.HasPrefix(got, "4521┃███") {
+		t.Errorf("gros-1 at 15 min, now at 15:30: the number before the line: %q", got)
+	}
+}
+
+func TestGanttNowLineGoesThroughEveryRow(t *testing.T) {
+	g := sampleGantt().WithClock(now.Add(2 * time.Hour)) // 16:30: the third cell
+	lines := GanttView{Gantt: g}.LinesFor(60)
+	col := -1
+	for i, r := range []rune(row(t, lines, "gros-2")) {
+		if r == '┃' {
+			col = i
+			break
+		}
+	}
+	if col != 2 {
+		t.Fatalf("the now line should be in the third cell (16:00), at %d", col)
+	}
+	// The same column of the node rows and the axis rows is ┃ (or a label).
+	left := len([]rune(lines[ganttHeader])) - len([]rune(row(t, lines, "gros-1")))
+	for _, i := range []int{4, 5, 7, ganttHeader, ganttHeader + 1, ganttHeader + 2} {
+		r := []rune(lines[i])
+		if len(r) <= left+col || (r[left+col] != '┃' && i >= ganttHeader) {
+			t.Errorf("line %d has no now line at %d: %q", i, left+col, lines[i])
+		}
 	}
 }
