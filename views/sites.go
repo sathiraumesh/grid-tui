@@ -6,19 +6,19 @@ import (
 	"grid-tui/models"
 )
 
-// SitesView draws the list of Grid'5000 sites:
+// SitesView draws the list of Grid'5000 sites, the selected one highlighted:
 //
 //	┌─   sites: 2   ─────────────────────────────────┐
 //	│                                                │
 //	│ SITE     NAME     DESCRIPTION                  │
-//	│ nancy    Nancy    Grid5000 Nancy site          │
+//	│ nancy    Nancy    Grid5000 Nancy site          │  ◀ selected
 //	│ rennes   Rennes   Grid5000 Rennes site         │
 //	└─ $ curl https://api.grid5000.fr/stable/sites ──┘
 type SitesView struct {
 	Sites models.Sites
 }
 
-var _ View = SitesView{} // SitesView implements View
+var _ Selectable = SitesView{} // SitesView implements Selectable (and View)
 
 var siteColumns = []string{"SITE", "NAME", "DESCRIPTION"}
 
@@ -28,6 +28,10 @@ func (v SitesView) Labels() []string {
 
 func (v SitesView) Command() string {
 	return "curl https://api.grid5000.fr/stable/sites"
+}
+
+func (v SitesView) Help() string {
+	return "↑↓ move • enter clusters • r reload • q quit"
 }
 
 // Lines is the sites as a table, or none while there are no sites (the
@@ -41,4 +45,12 @@ func (v SitesView) Lines() []string {
 		rows = append(rows, []string{s.UID, s.Name, s.Description})
 	}
 	return table(siteColumns, rows)
+}
+
+// Selected is the selected site's line: under the header row.
+func (v SitesView) Selected() int {
+	if v.Sites.Len() == 0 {
+		return -1
+	}
+	return v.Sites.Cursor + 1
 }

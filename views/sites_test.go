@@ -33,6 +33,19 @@ func TestSitesViewTable(t *testing.T) {
 	if got := v.Command(); got != "curl https://api.grid5000.fr/stable/sites" {
 		t.Errorf("Command = %q", got)
 	}
+	if !strings.Contains(v.Help(), "enter clusters") {
+		t.Errorf("Help = %q", v.Help())
+	}
+}
+
+func TestSitesViewSelected(t *testing.T) {
+	v := SitesView{Sites: sampleSites().Move(1)}
+	if got := v.Lines()[v.Selected()]; !strings.HasPrefix(got, "rennes") {
+		t.Errorf("selected line = %q, want the rennes row", got)
+	}
+	if (SitesView{Sites: models.NewSites(nil)}).Selected() != -1 {
+		t.Error("no sites: nothing selected")
+	}
 }
 
 func TestSitesViewEmpty(t *testing.T) {

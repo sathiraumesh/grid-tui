@@ -15,6 +15,9 @@ var (
 		BorderForeground(styles.Accent).
 		Padding(0, 1)
 
+	// Selected is the selected line of a list.
+	Selected = lipgloss.NewStyle().Background(styles.Shade).Foreground(styles.OnAccent)
+
 	// Header is the column titles of a table.
 	Header = lipgloss.NewStyle().Foreground(styles.Muted).Bold(true)
 

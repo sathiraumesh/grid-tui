@@ -1,9 +1,16 @@
 package controllers
 
-// Every key binding, as Bubble Tea names them. They are also on the help
-// line (views.HelpText).
+// Every key binding, as Bubble Tea names them. Each view lists the ones it
+// uses on the help line (its Help method).
 const (
-	keyReload = "r"
-	keyQuit   = "q"
-	keyCtrlC  = "ctrl+c"
+	keyUp      = "up"
+	keyUpAlt   = "k"
+	keyDown    = "down"
+	keyDownAlt = "j"
+	keyOpen    = "enter"
+	keyBack    = "esc"
+	keyBackAlt = "backspace"
+	keyReload  = "r"
+	keyQuit    = "q"
+	keyCtrlC   = "ctrl+c"
 )

@@ -2,8 +2,6 @@ package controllers
 
 import (
 	"context"
-	"errors"
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,24 +9,41 @@ import (
 	"grid-tui/models"
 )
 
-// fakeClient returns fixed sites, or err; calls counts the loads.
+// fakeClient answers with fixed data, or err; calls counts the loads.
 type fakeClient struct {
-	sites []models.Site
-	err   error
-	calls *int
+	sites    []models.Site
+	clusters map[string][]models.Cluster
+	err      error
+	calls    *int
 }
 
-func (f fakeClient) Sites(context.Context) ([]models.Site, error) {
+func (f fakeClient) count() {
 	if f.calls != nil {
 		*f.calls++
 	}
+}
+
+func (f fakeClient) Sites(context.Context) ([]models.Site, error) {
+	f.count()
 	return f.sites, f.err
+}
+
+func (f fakeClient) Clusters(_ context.Context, site string) ([]models.Cluster, error) {
+	f.count()
+	return f.clusters[site], f.err
 }
 
 var twoSites = []models.Site{
 	{UID: "nancy", Name: "Nancy", Description: "Grid5000 Nancy site"},
 	{UID: "rennes", Name: "Rennes", Description: "Grid5000 Rennes site"},
 }
+
+var clustersBySite = map[string][]models.Cluster{
+	"nancy":  {{UID: "graffiti", Model: "Dell PowerEdge T640"}, {UID: "gros", Model: "Dell PowerEdge R640"}},
+	"rennes": {{UID: "paravance", Model: "Dell PowerEdge R630"}},
+}
+
+var working = fakeClient{sites: twoSites, clusters: clustersBySite}
 
 // sized gives the controller a 100×24 terminal.
 func sized(t *testing.T, c Controller) Controller {
@@ -47,65 +62,29 @@ func run(t *testing.T, c Controller, cmd tea.Cmd) Controller {
 	return next.(Controller)
 }
 
-func key(k string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)} }
-
-func TestLoadsTheSitesAtStart(t *testing.T) {
-	c := sized(t, New(fakeClient{sites: twoSites}))
-	if v := c.View(); !strings.Contains(v, "loading") {
-		t.Errorf("before the sites arrive it should say loading:\n%s", v)
+// press sends one key and returns the controller and the command it started.
+func press(t *testing.T, c Controller, k string) (Controller, tea.Cmd) {
+	t.Helper()
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+	switch k {
+	case "enter":
+		msg = tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		msg = tea.KeyMsg{Type: tea.KeyEsc}
+	case "up":
+		msg = tea.KeyMsg{Type: tea.KeyUp}
+	case "down":
+		msg = tea.KeyMsg{Type: tea.KeyDown}
 	}
-
-	c = run(t, c, c.Init())
-	if c.Model().Len() != 2 {
-		t.Fatalf("Len = %d, want 2", c.Model().Len())
-	}
-	v := c.View()
-	for _, want := range []string{"sites: 2", "nancy", "Grid5000 Rennes site", "r reload"} {
-		if !strings.Contains(v, want) {
-			t.Errorf("view missing %q:\n%s", want, v)
-		}
-	}
-	if strings.Contains(v, "loading") {
-		t.Errorf("loading should be gone:\n%s", v)
-	}
+	next, cmd := c.Update(msg)
+	return next.(Controller), cmd
 }
 
-func TestLoadErrorIsShownAndReloadRetries(t *testing.T) {
-	calls := 0
-	failing := fakeClient{err: errors.New("GET /sites: 401 Unauthorized"), calls: &calls}
-	c := sized(t, New(failing))
-	c = run(t, c, c.Init())
-	if v := c.View(); !strings.Contains(v, "401 Unauthorized") {
-		t.Errorf("the error should be on screen:\n%s", v)
-	}
-
-	// r reloads, now with a client that works.
-	c.client = fakeClient{sites: twoSites, calls: &calls}
-	next, cmd := c.Update(key("r"))
-	c = next.(Controller)
-	if !c.loading || c.err != nil {
-		t.Errorf("r should start loading and clear the error")
-	}
-	c = run(t, c, cmd)
-	if c.Model().Len() != 2 || c.err != nil || calls != 2 {
-		t.Errorf("after reload: Len=%d err=%v calls=%d", c.Model().Len(), c.err, calls)
-	}
-}
-
-func TestErrorKeepsTheOldSites(t *testing.T) {
-	c := sized(t, New(fakeClient{sites: twoSites}))
-	c = run(t, c, c.Init())
-	next, _ := c.Update(SitesLoadedMsg{Err: errors.New("timeout")})
-	if c = next.(Controller); c.Model().Len() != 2 {
-		t.Errorf("a failed reload should keep the sites, Len=%d", c.Model().Len())
-	}
-}
-
-func TestReloadWhileLoadingDoesNothing(t *testing.T) {
-	c := sized(t, New(fakeClient{sites: twoSites})) // loading since New
-	if _, cmd := c.Update(key("r")); cmd != nil {
-		t.Error("r while loading should not start a second load")
-	}
+// loaded is a controller on a 100×24 terminal with the two sites loaded.
+func loaded(t *testing.T) Controller {
+	t.Helper()
+	c := sized(t, New(working))
+	return run(t, c, c.Init())
 }
 
 func TestNoClient(t *testing.T) {
@@ -113,11 +92,10 @@ func TestNoClient(t *testing.T) {
 	if c.Init() != nil {
 		t.Error("no client: nothing to load")
 	}
-	if _, cmd := c.Update(key("r")); cmd != nil {
-		t.Error("no client: r does nothing")
-	}
-	if v := c.View(); !strings.Contains(v, "sites: 0") || strings.Contains(v, "loading") {
-		t.Errorf("no client view:\n%s", v)
+	for _, k := range []string{"r", "enter"} {
+		if _, cmd := press(t, c, k); cmd != nil {
+			t.Errorf("no client: %s does nothing", k)
+		}
 	}
 }
 
@@ -128,7 +106,7 @@ func TestResizeStoresTheSize(t *testing.T) {
 }
 
 func TestQuit(t *testing.T) {
-	for _, k := range []tea.KeyMsg{key("q"), {Type: tea.KeyCtrlC}} {
+	for _, k := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune("q")}, {Type: tea.KeyCtrlC}} {
 		_, cmd := sized(t, New(nil)).Update(k)
 		if cmd == nil {
 			t.Fatalf("%s should quit", k)

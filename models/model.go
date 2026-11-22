@@ -10,3 +10,9 @@ type Model interface {
 	// Len is how many items (rows) the model holds.
 	Len() int
 }
+
+// moveCursor moves cursor by step in a list of n items, stopping at the
+// first and last item (0 when the list is empty).
+func moveCursor(cursor, step, n int) int {
+	return max(min(cursor+step, n-1), 0)
+}
