@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from rich.markup import escape
 from textual import work
@@ -30,8 +30,10 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Header, Static
 
+from grid_tui.format import clock, duration
 from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Node, Reservation, Site
 from grid_tui.screens.base import Api
+from grid_tui.screens.reservations import ReservationsScreen
 
 
 class ClusterDetailScreen(Screen):
@@ -39,6 +41,7 @@ class ClusterDetailScreen(Screen):
 
     BINDINGS = [
         Binding("escape,backspace", "app.pop_screen", "Clusters"),
+        Binding("g", "reservations", "Reservations"),
         Binding("r", "reload", "Reload"),
         Binding("q", "app.quit", "Quit"),
     ]
@@ -158,6 +161,18 @@ class ClusterDetailScreen(Screen):
         return "\n".join(f"[b]{label:<{width}}[/b]  {escape(value)}" for label, value in self.lines())
 
 
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """enter (or a click) on a node opens the reservations, on that node."""
+        self.action_reservations()
+
+    def action_reservations(self) -> None:
+        """The reservations of the cluster, with the nodes loaded here."""
+        if not self.nodes:
+            return  # nothing loaded yet
+        row = self.query_one("#nodes", DataTable).cursor_row
+        self.app.push_screen(ReservationsScreen(self.api, self.site, self.cluster, self.nodes, node=row))
+
+
 # How a node's job reads.
 
 
@@ -172,22 +187,6 @@ def job_text(r: Reservation | None, now: datetime) -> str:
     if r.start > now:
         return "next " + text
     return f"{text} {r.state}".rstrip()
-
-
-def clock(t: datetime, now: datetime) -> str:
-    """t as "15:04", with the day when it isn't now's day: "Mon 23 09:00"."""
-    if t.date() == now.date():
-        return t.strftime("%H:%M")
-    return t.strftime("%a %d %H:%M")
-
-
-def duration(d: timedelta) -> str:
-    """d as "3h", "1h30m" or "45m"."""
-    minutes = round(d.total_seconds() / 60)
-    h, m = divmod(minutes, 60)
-    if h and m:
-        return f"{h}h{m}m"
-    return f"{h}h" if h else f"{m}m"
 
 
 # How the hardware reads.

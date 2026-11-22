@@ -1,5 +1,5 @@
-"""The clusters of one site. A click on one (or enter) opens its detail;
-esc goes back to the sites.
+"""The clusters of one site. A click on one (or enter) opens its detail, g
+its reservations; esc goes back to the sites.
 
     ╭─ site: nancy · clusters: 2 ─────────────────────────────────────╮
     │ CLUSTER    MODEL                 QUEUES              WATTMETER   │
@@ -18,6 +18,7 @@ from textual.widgets import DataTable
 from grid_tui.models import Cluster, Site
 from grid_tui.screens.base import Api, ListScreen
 from grid_tui.screens.cluster import ClusterDetailScreen
+from grid_tui.screens.reservations import ReservationsScreen
 
 
 class ClustersScreen(ListScreen[Cluster]):
@@ -27,6 +28,7 @@ class ClustersScreen(ListScreen[Cluster]):
 
     BINDINGS = [
         Binding("escape,backspace", "app.pop_screen", "Sites"),
+        Binding("g", "reservations", "Reservations"),
         *ListScreen.BINDINGS,
     ]
 
@@ -59,3 +61,9 @@ class ClustersScreen(ListScreen[Cluster]):
         cluster = self.selected
         if cluster is not None:
             self.app.push_screen(ClusterDetailScreen(self.api, self.site, cluster))
+
+    def action_reservations(self) -> None:
+        """g: the reservations of the selected cluster (they load there)."""
+        cluster = self.selected
+        if cluster is not None:
+            self.app.push_screen(ReservationsScreen(self.api, self.site, cluster))

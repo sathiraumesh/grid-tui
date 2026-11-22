@@ -53,6 +53,16 @@ class Node:
             return "busy"
         return "besteffort" if held else "free"
 
+    def slot(self, start: datetime, end: datetime) -> str:
+        """What it does during [start, end): "down", "busy" (a regular job
+        overlaps), "besteffort" (only besteffort ones) or "free"."""
+        if not self.usable:
+            return "down"
+        held = [r for r in self.reservations if r.start < end and r.end > start]
+        if any(not r.besteffort for r in held):
+            return "busy"
+        return "besteffort" if held else "free"
+
     def job(self, at: datetime) -> Reservation | None:
         """The job it runs at that moment (a regular one before a besteffort
         one), or else its next one; None if it has none left."""
