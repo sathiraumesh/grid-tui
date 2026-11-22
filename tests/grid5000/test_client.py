@@ -2,8 +2,8 @@ import httpx
 import pytest
 
 from grid_tui.grid5000 import DEFAULT_BASE_URL, ApiError, Client
-from grid_tui.grid5000.client import clusters_path
-from grid_tui.models import Cluster, Site
+from grid_tui.grid5000.client import clusters_path, dig, each, num, text
+from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Site
 
 SITES = {
     "total": 2,
@@ -119,3 +119,92 @@ async def test_clusters_needs_a_site() -> None:
 def test_clusters_path_is_escaped() -> None:
     assert clusters_path("nancy") == "/sites/nancy/clusters"
     assert clusters_path("a/b") == "/sites/a%2Fb/clusters"
+
+
+# The hardware of a cluster: GET …/clusters/{cluster}/nodes, read from the first node.
+
+FULL_NODE = {
+    "uid": "gros-1",
+    "processor": {"model": "Intel Xeon", "other_description": "Intel Xeon Gold 5220", "clock_speed": 2200000000},
+    "architecture": {"nb_procs": 1, "nb_cores": 18, "nb_threads": 36},
+    "main_memory": {"ram_size": 103079215104},
+    "storage_devices": [{"storage": "SSD", "interface": "SATA", "size": 480103981056}],
+    "network_adapters": [
+        {"interface": "Ethernet", "rate": 25000000000, "mounted": True},
+        {"interface": "Ethernet", "rate": 25000000000, "mounted": False},  # not connected: left out
+    ],
+    "gpu_devices": {
+        "1": {"vendor": "Nvidia", "model": "A100", "memory": 2},
+        "0": {"vendor": "Nvidia", "model": "A100", "memory": 1},
+    },
+}
+
+# What a careless answer could look like: nulls, strings for numbers, junk in lists.
+MESSY_NODE = {
+    "uid": "odd-1",
+    "processor": None,
+    "architecture": {"nb_cores": "64", "nb_threads": True},
+    "main_memory": None,
+    "storage_devices": None,
+    "network_adapters": [None, "x", {"rate": "1e10", "mounted": True}],
+    "gpu_devices": [],
+}
+
+
+def nodes_api(request: httpx.Request) -> httpx.Response:
+    nodes = {
+        "/stable/sites/nancy/clusters/gros/nodes": [FULL_NODE, {"uid": "gros-2"}],
+        "/stable/sites/nancy/clusters/odd/nodes": [MESSY_NODE],
+        "/stable/sites/nancy/clusters/empty/nodes": [],
+    }.get(request.url.path)
+    if nodes is None:
+        return httpx.Response(404, json={"message": "unknown cluster"})
+    return httpx.Response(200, json={"total": len(nodes), "offset": 0, "items": nodes})
+
+
+def nodes_client() -> Client:
+    return Client("https://api.test/stable", transport=httpx.MockTransport(nodes_api))
+
+
+async def test_hardware() -> None:
+    assert await nodes_client().hardware("nancy", "gros") == Hardware(
+        nodes=2,
+        cpu="Intel Xeon Gold 5220",
+        sockets=1,
+        cores=18,
+        threads=36,
+        clock_ghz=2.2,
+        memory=103079215104,
+        disks=(Disk("SSD", "SATA", 480103981056),),
+        nics=(NIC("Ethernet", 25000000000),),
+        gpus=(GPU("Nvidia", "A100", 1), GPU("Nvidia", "A100", 2)),  # in key order: "0", "1"
+    )
+
+
+async def test_hardware_reads_what_it_can_of_a_messy_answer() -> None:
+    assert await nodes_client().hardware("nancy", "odd") == Hardware(
+        nodes=1, cores=64, nics=(NIC("", 10000000000),)
+    )
+
+
+async def test_hardware_errors() -> None:
+    c = nodes_client()
+    with pytest.raises(ValueError, match="has no nodes"):
+        await c.hardware("nancy", "empty")
+    with pytest.raises(ApiError, match="404 Not Found: unknown cluster"):
+        await c.hardware("nancy", "atlantis")
+    with pytest.raises(ValueError):
+        await c.hardware("nancy", "")
+
+
+def test_safe_readers() -> None:
+    data = {"a": {"b": 1, "n": None, "s": "2.5", "t": True, "x": "abc"}, "l": [{"k": 1}, None, 3]}
+    assert dig(data, "a", "b") == 1
+    assert dig(data, "a", "n") is None and dig(data, "a", "n", default=0) == 0
+    assert dig(data, "nope", "b", default="d") == "d"
+    assert dig(data, "a", "b", "deeper") is None  # 1 isn't a dict
+    assert num(data, "a", "s") == 2.5 and num(data, "a", "t") == 0 and num(data, "a", "x") == 0
+    assert text(data, "a", "x") == "abc" and text(data, "a", "b") == ""
+    assert each(data, "l") == [{"k": 1}]
+    assert each({"d": {"1": {"v": 2}, "0": {"v": 1}}}, "d") == [{"v": 1}, {"v": 2}]
+    assert each(data, "a", "b") == []

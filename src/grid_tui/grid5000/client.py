@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 import httpx
 
-from grid_tui.models import Cluster, Site
+from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Site
 
 DEFAULT_BASE_URL = "https://api.grid5000.fr/stable"
 SITES_PATH = "/sites"
@@ -100,6 +100,90 @@ class Client:
             )
             for item in data.get("items", [])
         ]
+
+    async def hardware(self, site: str, cluster: str) -> Hardware:
+        """The hardware of a cluster, from its first node: GET …/clusters/{cluster}/nodes.
+
+        Every value is read with dig/num/text: a field that is missing, null
+        or of another type gives "" or 0 instead of failing the whole answer.
+        """
+        if not site or not cluster:
+            raise ValueError("hardware: a site and a cluster are needed")
+        data = await self._get(f"{clusters_path(site)}/{quote(cluster, safe='')}/nodes")
+        items = dig(data, "items", default=[])
+        if not isinstance(items, list) or not items:
+            raise ValueError(f"{cluster} has no nodes")
+        n = items[0]
+        return Hardware(
+            nodes=len(items),
+            cpu=text(n, "processor", "other_description") or text(n, "processor", "model"),
+            sockets=int(num(n, "architecture", "nb_procs")),
+            cores=int(num(n, "architecture", "nb_cores")),
+            threads=int(num(n, "architecture", "nb_threads")),
+            clock_ghz=num(n, "processor", "clock_speed") / 1e9,
+            memory=int(num(n, "main_memory", "ram_size")),
+            disks=tuple(
+                Disk(text(d, "storage"), text(d, "interface"), int(num(d, "size")))
+                for d in each(n, "storage_devices")
+            ),
+            nics=tuple(
+                NIC(text(a, "interface"), int(num(a, "rate")))
+                for a in each(n, "network_adapters")
+                if dig(a, "mounted") is True  # only the cards that are connected
+            ),
+            gpus=tuple(
+                GPU(text(g, "vendor"), text(g, "model"), int(num(g, "memory")))
+                for g in each(n, "gpu_devices")
+            ),
+        )
+
+
+# Reading the API's JSON safely: each of these returns a default when a key
+# is missing, a value is null, or it isn't of the type wanted.
+
+
+def dig(obj: Any, *keys: str, default: Any = None) -> Any:
+    """obj[k1][k2]…, or default as soon as a step isn't there.
+
+    dig(node, "main_memory", "ram_size")  →  103079215104, or None
+    """
+    for k in keys:
+        if not isinstance(obj, dict) or obj.get(k) is None:
+            return default
+        obj = obj[k]
+    return obj
+
+
+def text(obj: Any, *keys: str) -> str:
+    """The string at keys, or ""."""
+    v = dig(obj, *keys)
+    return v if isinstance(v, str) else ""
+
+
+def num(obj: Any, *keys: str) -> float:
+    """The number at keys (a number in a string counts too), or 0."""
+    v = dig(obj, *keys)
+    if isinstance(v, bool):  # True is an int in Python: not a number here
+        return 0
+    if isinstance(v, (int, float)):
+        return v
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            return 0
+    return 0
+
+
+def each(obj: Any, *keys: str) -> list[dict]:
+    """The dicts at keys: a list's dicts, or a dict's values in key order
+    (gpu_devices is {"0": {...}, "1": {...}}); [] if neither."""
+    v = dig(obj, *keys)
+    if isinstance(v, dict):
+        v = [v[k] for k in sorted(v)]
+    if not isinstance(v, list):
+        return []
+    return [x for x in v if isinstance(x, dict)]
 
 
 def clusters_path(site: str) -> str:

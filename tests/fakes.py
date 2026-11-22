@@ -1,0 +1,91 @@
+"""What the screen tests share: a fake API, sample data, and helpers that
+read what is on screen."""
+
+from __future__ import annotations
+
+import asyncio
+
+from textual.widgets import DataTable, Static
+
+from grid_tui.app import GridTUI
+from grid_tui.models import GPU, NIC, Cluster, Disk, Hardware, Site
+
+TWO_SITES = [Site("nancy", "Nancy", "Grid5000 Nancy site"), Site("rennes", "Rennes", "Grid5000 Rennes site")]
+
+CLUSTERS = {
+    "nancy": [
+        Cluster("graffiti", "Dell PowerEdge T640", ("production", "admin")),
+        Cluster("gros", "Dell PowerEdge R640", ("default", "admin"), ("wattmetre_power_watt",)),
+    ],
+    "rennes": [Cluster("paravance", "Dell PowerEdge R630", ("default",))],
+}
+
+GROS = Hardware(
+    nodes=124,
+    cpu="Intel Xeon Gold 5220",
+    sockets=1,
+    cores=18,
+    threads=36,
+    clock_ghz=2.2,
+    memory=96 * 2**30,
+    disks=(Disk("SSD", "SATA", 480 * 10**9), Disk("SSD", "SATA", 960 * 10**9)),
+    nics=(NIC("Ethernet", 25 * 10**9),),
+)
+
+GPU_NODE = Hardware(nodes=2, cpu="AMD EPYC 7452", sockets=2, cores=64, memory=512 * 2**30,
+                    gpus=(GPU("Nvidia", "A100", 40 * 2**30),) * 4)
+
+
+class FakeClient:
+    """Answers with sites, or raises error; calls counts the loads."""
+
+    def __init__(self, sites: list[Site] | None = None, error: Exception | None = None) -> None:
+        self.result, self.error, self.calls = sites or [], error, 0
+        self.gate: asyncio.Event | None = None  # set: loads wait for it
+        self.clusters_error: Exception | None = None
+        self.hardware_error: Exception | None = None
+        self.hardware_gate: asyncio.Event | None = None
+
+    async def sites(self) -> list[Site]:
+        self.calls += 1
+        if self.gate is not None:
+            await self.gate.wait()
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+    async def clusters(self, site: str) -> list[Cluster]:
+        self.calls += 1
+        if self.clusters_error is not None:
+            raise self.clusters_error
+        return CLUSTERS.get(site, [])
+
+    async def hardware(self, site: str, cluster: str) -> Hardware:
+        self.calls += 1
+        if self.hardware_gate is not None:
+            await self.hardware_gate.wait()
+        if self.hardware_error is not None:
+            raise self.hardware_error
+        return {"gros": GROS, "graffiti": GPU_NODE}.get(cluster, Hardware())
+
+    def command(self, path: str) -> str:
+        return "curl https://api.test" + path
+
+
+def status(app: GridTUI) -> str:
+    return str(app.screen.query_one("#status", Static).render())
+
+def cells(app: GridTUI, row: int) -> list[str]:
+    return [str(c) for c in app.screen.query_one(DataTable).get_row_at(row)]
+
+def detail(app: GridTUI) -> str:
+    """The detail screen's text, without its styling."""
+    return app.screen.query_one("#detail", Static).render().plain
+
+
+async def open_gros(pilot) -> None:
+    await pilot.pause()
+    await pilot.press("enter")  # nancy's clusters
+    await pilot.pause()
+    await pilot.press("down", "enter")  # gros
+    await pilot.pause()

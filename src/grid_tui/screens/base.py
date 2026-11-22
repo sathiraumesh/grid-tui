@@ -24,7 +24,7 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Header, Static
 
-from grid_tui.models import Cluster, Site
+from grid_tui.models import Cluster, Hardware, Site
 
 Item = TypeVar("Item")
 
@@ -35,6 +35,8 @@ class Api(Protocol):
     async def sites(self) -> list[Site]: ...
 
     async def clusters(self, site: str) -> list[Cluster]: ...
+
+    async def hardware(self, site: str, cluster: str) -> Hardware: ...
 
     def command(self, path: str) -> str: ...
 

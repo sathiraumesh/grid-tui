@@ -1,4 +1,5 @@
-"""The clusters of one site. esc goes back to the sites.
+"""The clusters of one site. A click on one (or enter) opens its detail;
+esc goes back to the sites.
 
     ╭─ site: nancy · clusters: 2 ─────────────────────────────────────╮
     │ CLUSTER    MODEL                 QUEUES              WATTMETER   │
@@ -12,9 +13,11 @@ from __future__ import annotations
 from typing import Any
 
 from textual.binding import Binding
+from textual.widgets import DataTable
 
 from grid_tui.models import Cluster, Site
 from grid_tui.screens.base import Api, ListScreen
+from grid_tui.screens.cluster import ClusterDetailScreen
 
 
 class ClustersScreen(ListScreen[Cluster]):
@@ -50,3 +53,9 @@ class ClustersScreen(ListScreen[Cluster]):
 
     def path(self) -> str:
         return f"/sites/{self.site.uid}/clusters"
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """A click on a cluster (or enter) opens its detail."""
+        cluster = self.selected
+        if cluster is not None:
+            self.app.push_screen(ClusterDetailScreen(self.api, self.site, cluster))
