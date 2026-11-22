@@ -39,7 +39,7 @@ func TestMoveSelectsASite(t *testing.T) {
 }
 
 func TestSitesLoadErrorIsShownAndReloadRetries(t *testing.T) {
-	calls := 0
+	var calls int32
 	c := sized(t, New(fakeClient{err: errors.New("GET /sites: 401 Unauthorized"), calls: &calls}))
 	c = run(t, c, c.Init())
 	if v := c.View(); !strings.Contains(v, "401 Unauthorized") {

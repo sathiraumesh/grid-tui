@@ -54,9 +54,6 @@ func TestMoveSelectsACluster(t *testing.T) {
 	if cur := c.Model().(models.Clusters).Cursor; cur != 1 {
 		t.Errorf("Cursor = %d, want 1", cur)
 	}
-	if _, cmd := press(t, c, "enter"); cmd != nil {
-		t.Error("enter on clusters does nothing (yet)")
-	}
 }
 
 func TestLateClustersAreDropped(t *testing.T) {
@@ -76,7 +73,7 @@ func TestLateClustersAreDropped(t *testing.T) {
 }
 
 func TestClustersErrorAndReload(t *testing.T) {
-	calls := 0
+	var calls int32
 	c := loaded(t)
 	c.client = fakeClient{err: errors.New("GET /sites/nancy/clusters: 500"), calls: &calls}
 	c, cmd := press(t, c, "enter")

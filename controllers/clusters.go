@@ -9,7 +9,7 @@ import (
 )
 
 // The clusters of one site: loaded when enter opens the site and with r;
-// esc goes back to the sites.
+// enter opens the selected cluster (cluster.go); esc goes back to the sites.
 //
 //	enter / r ──▶ loadClusters ──runs──▶ client.Clusters ──▶ ClustersLoadedMsg ──▶ onClustersLoaded
 
@@ -38,16 +38,10 @@ func (c Controller) onClustersLoaded(msg ClustersLoadedMsg) Controller {
 	}
 	c.loading, c.err = false, msg.Err
 	if msg.Err == nil {
-		c.model = models.NewClusters(msg.Site, msg.Clusters)
-	}
-	return c
-}
-
-// back returns from the clusters to the sites, on the same row.
-func (c Controller) back() Controller {
-	if _, onClusters := c.model.(models.Clusters); onClusters {
-		c.model = c.sites
-		c.loading, c.err = false, nil // a clusters load still on its way is dropped
+		c.clusters = models.NewClusters(msg.Site, msg.Clusters)
+		c.clusters.Cursor = cur.Cursor // a reload keeps the selection
+		c.clusters = c.clusters.Move(0)
+		c.model = c.clusters
 	}
 	return c
 }

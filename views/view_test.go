@@ -36,7 +36,8 @@ func (p picked) Selected() int { return p.sel }
 
 func TestRenderFillsTheScreenExactly(t *testing.T) {
 	views := []View{nil, listing{0}, listing{100}, picked{listing{100}, 80},
-		SitesView{Sites: sampleSites()}, ClustersView{Clusters: sampleClusters()}}
+		SitesView{Sites: sampleSites()}, ClustersView{Clusters: sampleClusters()},
+		ClusterDetailView{Detail: sampleDetail()}, ClusterDetailView{Detail: manyNodes(200).Move(150)}}
 	for _, v := range views {
 		for _, size := range [][2]int{{100, 24}, {80, 40}, {60, 10}} {
 			lines := strings.Split(Render(v, Status{}, size[0], size[1]), "\n")
@@ -94,19 +95,23 @@ func TestRenderScrollsToTheSelectedLine(t *testing.T) {
 func TestWindow(t *testing.T) {
 	lines := []string{"a", "b", "c", "d", "e"}
 	cases := []struct {
-		sel, h  int
-		want    string
-		wantSel int
+		pinned, sel, h int
+		want           string
+		wantSel        int
 	}{
-		{-1, 3, "abc", -1},
-		{1, 3, "abc", 1},
-		{4, 3, "cde", 2},
-		{2, 10, "abcde", 2},
+		{0, -1, 3, "abc", -1},
+		{0, 1, 3, "abc", 1},
+		{0, 4, 3, "cde", 2},
+		{0, 2, 10, "abcde", 2},
+		{1, 4, 3, "ade", 2},   // "a" stays, the rest scrolls to "e"
+		{2, 0, 3, "abc", 0},   // a pinned line can be selected
+		{2, 4, 2, "ab", -1},   // no room for more than the pinned lines
+		{9, -1, 3, "abc", -1}, // more pinned than fit
 	}
 	for _, c := range cases {
-		got, sel := window(lines, c.sel, c.h)
+		got, sel := window(lines, c.pinned, c.sel, c.h)
 		if strings.Join(got, "") != c.want || sel != c.wantSel {
-			t.Errorf("window(sel=%d, h=%d) = %q, %d; want %q, %d", c.sel, c.h, got, sel, c.want, c.wantSel)
+			t.Errorf("window(pinned=%d, sel=%d, h=%d) = %q, %d; want %q, %d", c.pinned, c.sel, c.h, got, sel, c.want, c.wantSel)
 		}
 	}
 }
@@ -124,6 +129,9 @@ func TestFor(t *testing.T) {
 	if _, ok := For(models.NewClusters("nancy", nil)).(ClustersView); !ok {
 		t.Error("For(Clusters) should be a ClustersView")
 	}
+	if _, ok := For(models.NewClusterDetail("nancy", models.Cluster{UID: "gros"})).(ClusterDetailView); !ok {
+		t.Error("For(ClusterDetail) should be a ClusterDetailView")
+	}
 	if For(nil) != nil {
 		t.Error("For(nil) should be nil")
 	}
@@ -138,6 +146,7 @@ func TestBottomLine(t *testing.T) {
 		{Status{Loading: true}, "loading…"},
 		{Status{Err: errors.New("GET /sites: 401 Unauthorized")}, "error: GET /sites: 401 Unauthorized • r retry • listing help"},
 		{Status{Loading: true, Err: errors.New("boom")}, "error: boom"}, // the error wins
+		{Status{Err: errors.Join(errors.New("a"), errors.New("b"))}, "error: a; b"},
 	}
 	for _, c := range cases {
 		lines := strings.Split(Render(listing{0}, c.status, 100, 24), "\n")

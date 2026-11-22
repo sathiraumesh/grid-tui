@@ -32,7 +32,7 @@ func (v ClustersView) Command() string {
 }
 
 func (v ClustersView) Help() string {
-	return "↑↓ move • esc sites • r reload • q quit"
+	return "↑↓ move • enter details • esc sites • r reload • q quit"
 }
 
 // Lines is the clusters as a table, or none while there are none (or they
@@ -47,6 +47,9 @@ func (v ClustersView) Lines() []string {
 	}
 	return table(clusterColumns, rows)
 }
+
+// Pinned keeps the column titles on screen.
+func (v ClustersView) Pinned() int { return 1 }
 
 // Selected is the selected cluster's line: under the header row.
 func (v ClustersView) Selected() int {

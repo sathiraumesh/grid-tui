@@ -6,12 +6,13 @@
 // message, its loader and what its keys do:
 //
 //	sites.go      the list of sites: load them, enter opens a site
-//	clusters.go   the clusters of a site: load them, esc goes back
+//	clusters.go   the clusters of a site: load them, enter opens a cluster
+//	cluster.go    one cluster in detail: its hardware, nodes and their jobs
 //
 // The screens, and the keys between them:
 //
-//	Sites ──enter──▶ Clusters of the selected site
-//	      ◀──esc───
+//	Sites ──enter──▶ Clusters of a site ──enter──▶ Cluster detail
+//	      ◀──esc───                     ◀──esc───
 //
 // Calling the API can take seconds, so it never runs in Update: Update
 // returns a command, Bubble Tea runs it in the background, and its result
@@ -32,6 +33,8 @@ import (
 type Client interface {
 	Sites(ctx context.Context) ([]models.Site, error)
 	Clusters(ctx context.Context, site string) ([]models.Cluster, error)
+	ClusterStatus(ctx context.Context, site, cluster string) ([]models.NodeStatus, error)
+	ClusterHardware(ctx context.Context, site, cluster string) (models.Hardware, error)
 }
 
 // Controller holds what the panel shows, the terminal size and whether a
@@ -39,8 +42,11 @@ type Client interface {
 type Controller struct {
 	client Client // nil: nothing is loaded
 
-	sites models.Sites // kept while clusters are shown, so esc returns to the same row
-	model models.Model // what the panel shows now: sites, or one site's clusters
+	// The lists are kept while a deeper screen is shown, so esc returns to
+	// the same row.
+	sites    models.Sites
+	clusters models.Clusters
+	model    models.Model // what the panel shows now: sites, clusters or a cluster
 
 	width, height int   // 0 until the first resize
 	loading       bool  // a load for the model shown is on its way
@@ -83,6 +89,8 @@ func (c Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return c.onSitesLoaded(msg), nil
 	case ClustersLoadedMsg:
 		return c.onClustersLoaded(msg), nil
+	case DetailLoadedMsg:
+		return c.onDetailLoaded(msg), nil
 	case tea.KeyMsg:
 		return c.onKey(msg)
 	}
@@ -99,7 +107,7 @@ func (c Controller) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyDown, keyDownAlt:
 		return c.move(1), nil
 	case keyOpen:
-		return c.openSite()
+		return c.open()
 	case keyBack, keyBackAlt:
 		return c.back(), nil
 	case keyReload:
@@ -115,8 +123,37 @@ func (c Controller) move(step int) Controller {
 		c.sites = m.Move(step)
 		c.model = c.sites
 	case models.Clusters:
+		c.clusters = m.Move(step)
+		c.model = c.clusters
+	case models.ClusterDetail:
 		c.model = m.Move(step)
 	}
+	return c
+}
+
+// open goes one screen deeper: a site's clusters, or a cluster's detail.
+func (c Controller) open() (tea.Model, tea.Cmd) {
+	switch c.model.(type) {
+	case models.Sites:
+		return c.openSite()
+	case models.Clusters:
+		return c.openCluster()
+	}
+	return c, nil
+}
+
+// back goes one screen up, to the same row as before. A load still on its
+// way for the screen left is dropped when it arrives.
+func (c Controller) back() Controller {
+	switch c.model.(type) {
+	case models.ClusterDetail:
+		c.model = c.clusters
+	case models.Clusters:
+		c.model = c.sites
+	default:
+		return c
+	}
+	c.loading, c.err = false, nil
 	return c
 }
 
@@ -129,6 +166,8 @@ func (c Controller) reload() (tea.Model, tea.Cmd) {
 	switch m := c.model.(type) {
 	case models.Clusters:
 		return c, loadClusters(c.client, m.Site)
+	case models.ClusterDetail:
+		return c, loadDetail(c.client, m.Site, m.Cluster.UID)
 	default:
 		return c, loadSites(c.client)
 	}

@@ -30,3 +30,11 @@ func (c Clusters) Move(step int) Clusters {
 	c.Cursor = moveCursor(c.Cursor, step, len(c.Items))
 	return c
 }
+
+// Selected is the selected cluster, or false if there are none.
+func (c Clusters) Selected() (Cluster, bool) {
+	if c.Cursor < 0 || c.Cursor >= len(c.Items) {
+		return Cluster{}, false
+	}
+	return c.Items[c.Cursor], true
+}

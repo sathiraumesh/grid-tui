@@ -32,7 +32,7 @@ func TestClustersViewTable(t *testing.T) {
 	if got := v.Command(); got != "curl https://api.grid5000.fr/stable/sites/nancy/clusters" {
 		t.Errorf("Command = %q", got)
 	}
-	if !strings.Contains(v.Help(), "esc sites") {
+	if !strings.Contains(v.Help(), "enter details") || !strings.Contains(v.Help(), "esc sites") {
 		t.Errorf("Help = %q", v.Help())
 	}
 }

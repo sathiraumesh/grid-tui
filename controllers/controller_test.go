@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,13 +14,15 @@ import (
 type fakeClient struct {
 	sites    []models.Site
 	clusters map[string][]models.Cluster
+	nodes    map[string][]models.NodeStatus // by cluster
+	hardware map[string]models.Hardware     // by cluster
 	err      error
-	calls    *int
+	calls    *int32 // atomic: the detail's two calls run at the same time
 }
 
 func (f fakeClient) count() {
 	if f.calls != nil {
-		*f.calls++
+		atomic.AddInt32(f.calls, 1)
 	}
 }
 
@@ -33,6 +36,16 @@ func (f fakeClient) Clusters(_ context.Context, site string) ([]models.Cluster, 
 	return f.clusters[site], f.err
 }
 
+func (f fakeClient) ClusterStatus(_ context.Context, _, cluster string) ([]models.NodeStatus, error) {
+	f.count()
+	return f.nodes[cluster], f.err
+}
+
+func (f fakeClient) ClusterHardware(_ context.Context, _, cluster string) (models.Hardware, error) {
+	f.count()
+	return f.hardware[cluster], f.err
+}
+
 var twoSites = []models.Site{
 	{UID: "nancy", Name: "Nancy", Description: "Grid5000 Nancy site"},
 	{UID: "rennes", Name: "Rennes", Description: "Grid5000 Rennes site"},
@@ -43,7 +56,16 @@ var clustersBySite = map[string][]models.Cluster{
 	"rennes": {{UID: "paravance", Model: "Dell PowerEdge R630"}},
 }
 
-var working = fakeClient{sites: twoSites, clusters: clustersBySite}
+var nodesByCluster = map[string][]models.NodeStatus{
+	"gros":     {{Name: "gros-2", Hard: "alive", Soft: "free"}, {Name: "gros-1", Hard: "alive", Soft: "free"}},
+	"graffiti": {{Name: "graffiti-1", Hard: "dead", Soft: "unknown"}},
+}
+
+var hardwareByCluster = map[string]models.Hardware{
+	"gros": {CPU: "Intel Xeon Gold 5220", Sockets: 1, Cores: 18, Threads: 36, MemoryBytes: 96 << 30},
+}
+
+var working = fakeClient{sites: twoSites, clusters: clustersBySite, nodes: nodesByCluster, hardware: hardwareByCluster}
 
 // sized gives the controller a 100×24 terminal.
 func sized(t *testing.T, c Controller) Controller {

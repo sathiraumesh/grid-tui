@@ -6,6 +6,7 @@
 //
 //	sites.go      SitesView, for models.Sites
 //	clusters.go   ClustersView, for models.Clusters
+//	cluster.go    ClusterDetailView, for models.ClusterDetail
 //
 // Every view implements View, so Render draws them all the same way: a
 // bordered panel with labels on top, a command below and a help line.
@@ -41,6 +42,13 @@ type Selectable interface {
 	Selected() int
 }
 
+// Pinned is a View whose first Pinned() lines (info, column titles) stay
+// on screen while the rest scrolls.
+type Pinned interface {
+	View
+	Pinned() int
+}
+
 // For returns the view of m, or nil if m is nil or has no view.
 func For(m models.Model) View {
 	switch m := m.(type) {
@@ -48,6 +56,8 @@ func For(m models.Model) View {
 		return SitesView{Sites: m}
 	case models.Clusters:
 		return ClustersView{Clusters: m}
+	case models.ClusterDetail:
+		return ClusterDetailView{Detail: m}
 	}
 	return nil
 }
@@ -90,7 +100,9 @@ func Render(v View, status Status, width, height int) string {
 func bottomLine(s Status, help string) string {
 	switch {
 	case s.Err != nil:
-		return ErrorText.Render("error: "+s.Err.Error()) + Help.Render(" • r retry • "+help)
+		// Joined errors are one per line: keep them on the one bottom line.
+		msg := strings.ReplaceAll(s.Err.Error(), "\n", "; ")
+		return ErrorText.Render("error: "+msg) + Help.Render(" • r retry • "+help)
 	case s.Loading:
 		return Help.Render("loading… • q quit")
 	}
@@ -104,18 +116,32 @@ func ContentHeight(height int) int {
 	return max(height-1-2*panelMarginY-2-panelPaddingTop, 1)
 }
 
-// window returns the lines that fit in h rows, scrolled as little as needed
-// to keep line sel on screen, and sel's index in the result (-1 if none).
-func window(lines []string, sel, h int) ([]string, int) {
+// window returns the lines that fit in h rows: the first pinned lines,
+// then the rest scrolled as little as needed to keep line sel on screen.
+// It also returns sel's index in the result (-1 if none).
+//
+//	lines:  P P a b c d e f      pinned = 2, h = 5, sel = 6 ("e")
+//	shown:  P P c d e            sel → 4
+func window(lines []string, pinned, sel, h int) ([]string, int) {
+	pinned = max(min(pinned, len(lines), h), 0)
+	out := append([]string(nil), lines[:pinned]...)
+	rest, room := lines[pinned:], h-pinned
+
+	rsel := sel - pinned // sel within rest; negative if none or pinned
 	first := 0
-	if sel >= h {
-		first = sel - h + 1
+	if rsel >= room {
+		first = rsel - room + 1
 	}
-	end := min(first+h, len(lines))
-	if sel >= first && sel < end {
-		return lines[first:end], sel - first
+	end := min(first+room, len(rest))
+	out = append(out, rest[first:end]...)
+
+	switch {
+	case sel >= 0 && sel < pinned:
+		return out, sel
+	case rsel >= first && rsel < end:
+		return out, pinned + rsel - first
 	}
-	return lines[first:end], -1
+	return out, -1
 }
 
 // panel draws the bordered box with the view's lines and border texts.
@@ -126,17 +152,20 @@ func panel(v View, width, height int) string {
 
 	var labels, lines []string
 	var command string
-	sel := -1
+	sel, pinned := -1, 0
 	if v != nil {
 		labels, command, lines = v.Labels(), v.Command(), v.Lines()
 		if s, ok := v.(Selectable); ok {
 			sel = s.Selected()
 		}
+		if p, ok := v.(Pinned); ok {
+			pinned = p.Pinned()
+		}
 	}
 	if len(lines) == 0 {
-		lines, sel = []string{Help.Render(emptyText)}, -1
+		lines, sel, pinned = []string{Help.Render(emptyText)}, -1, 0
 	}
-	lines, sel = window(lines, sel, h)
+	lines, sel = window(lines, pinned, sel, h)
 
 	// A line wider than the panel is cut off: a wrapped one would make the
 	// panel taller than the screen. The selected one is highlighted across

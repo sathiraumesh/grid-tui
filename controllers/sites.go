@@ -49,7 +49,8 @@ func (c Controller) openSite() (tea.Model, tea.Cmd) {
 	if !ok {
 		return c, nil
 	}
-	c.model = models.NewClusters(site.UID, nil)
+	c.clusters = models.NewClusters(site.UID, nil)
+	c.model = c.clusters
 	c.loading, c.err = true, nil
 	return c, loadClusters(c.client, site.UID)
 }

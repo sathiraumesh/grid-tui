@@ -47,6 +47,9 @@ func (v SitesView) Lines() []string {
 	return table(siteColumns, rows)
 }
 
+// Pinned keeps the column titles on screen.
+func (v SitesView) Pinned() int { return 1 }
+
 // Selected is the selected site's line: under the header row.
 func (v SitesView) Selected() int {
 	if v.Sites.Len() == 0 {
