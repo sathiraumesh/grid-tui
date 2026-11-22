@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"grid-tui/internal/models"
+	"grid-tui/models"
 )
 
 // fakeClient returns fixed sites, or err; calls counts the loads.

@@ -11,7 +11,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"grid-tui/internal/models"
+	"grid-tui/models"
 )
 
 // View is what the panel draws for one model.

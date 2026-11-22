@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"grid-tui/internal/models"
+	"grid-tui/models"
 )
 
 // listing is a test view with labels, a command and n lines, to check

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"grid-tui/internal/app"
+	"grid-tui/app"
 )
 
 // version is the release the binary was built from, set by the release

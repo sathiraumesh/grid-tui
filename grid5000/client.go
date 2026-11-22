@@ -1,6 +1,6 @@
 // Package grid5000 is the connection to the Grid'5000 REST API
 // (https://api.grid5000.fr). It knows nothing about the UI: it returns the
-// app's own data types from internal/models.
+// app's own data types from the models package.
 package grid5000
 
 import (

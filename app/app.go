@@ -4,8 +4,8 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"grid-tui/internal/controllers"
-	"grid-tui/internal/grid5000"
+	"grid-tui/controllers"
+	"grid-tui/grid5000"
 )
 
 // App holds the controller Bubble Tea runs.

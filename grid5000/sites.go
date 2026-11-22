@@ -3,7 +3,7 @@ package grid5000
 import (
 	"context"
 
-	"grid-tui/internal/models"
+	"grid-tui/models"
 )
 
 // SitesPath is the API path of the list of sites.

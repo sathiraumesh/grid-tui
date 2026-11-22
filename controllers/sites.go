@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"grid-tui/internal/models"
+	"grid-tui/models"
 )
 
 // Loading the sites. Calling the API can take seconds, so it never runs in

@@ -6,8 +6,8 @@ package controllers
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"grid-tui/internal/models"
-	"grid-tui/internal/views"
+	"grid-tui/models"
+	"grid-tui/views"
 )
 
 // Controller holds the model the panel shows, the terminal size and

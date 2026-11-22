@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"grid-tui/internal/models"
+	"grid-tui/models"
 )
 
 // fakeAPI answers like the Grid'5000 API, and wants basic auth alice/secret.

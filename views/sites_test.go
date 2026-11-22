@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"grid-tui/internal/models"
+	"grid-tui/models"
 )
 
 // sampleSites are made-up rows for tests only.

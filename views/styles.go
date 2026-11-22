@@ -3,11 +3,11 @@ package views
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"grid-tui/internal/styles"
+	"grid-tui/styles"
 )
 
 // Lip Gloss styles of each part of the screen. Colors come from the
-// palette in internal/styles, by role name.
+// palette in the styles package, by role name.
 var (
 	// Panel draws the main box.
 	Panel = lipgloss.NewStyle().

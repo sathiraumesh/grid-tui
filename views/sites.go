@@ -3,7 +3,7 @@ package views
 import (
 	"strconv"
 
-	"grid-tui/internal/models"
+	"grid-tui/models"
 )
 
 // SitesView draws the list of Grid'5000 sites:
