@@ -1,0 +1,31 @@
+[project]
+name = "grid-tui"
+version = "0.1.0"
+description = "A terminal UI for Grid'5000, built with Textual"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=8.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "textual-dev>=1.7",
+]
+
+[project.scripts]
+grid-tui = "grid_tui.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

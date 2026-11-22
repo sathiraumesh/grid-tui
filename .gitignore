@@ -1,19 +1,5 @@
-# The built app and other binaries
-/grid-tui
-/dist/
-*.exe
-*.test
-*.out
-
-# Coverage and profiles
-coverage.*
-*.prof
-
-# Editors and macOS
-.vscode/
-.idea/
-*.swp
-.DS_Store
-
-# Local environment (G5K credentials)
-.env
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
