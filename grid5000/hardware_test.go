@@ -41,7 +41,8 @@ func TestClusterHardware(t *testing.T) {
 	}
 	a100 := models.GPU{Vendor: "Nvidia", Model: "A100", MemoryBytes: 42949672960}
 	want := models.Hardware{
-		CPU: "Intel Xeon Gold 5220", Sockets: 1, Cores: 18, Threads: 36, ClockGHz: 2.2,
+		Nodes: 2,
+		CPU:   "Intel Xeon Gold 5220", Sockets: 1, Cores: 18, Threads: 36, ClockGHz: 2.2,
 		MemoryBytes: 103079215104,
 		Disks: []models.Disk{
 			{Kind: "SSD", Interface: "SATA", Model: "MZ7KH480HAHQ0D3", Bytes: 480103981056},

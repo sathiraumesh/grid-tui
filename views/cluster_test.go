@@ -17,7 +17,8 @@ func at(h float64) time.Time { return now.Add(time.Duration(h * float64(time.Hou
 // sampleDetail is a made-up cluster for tests only: gros-1 free with a job
 // later, gros-2 running a job, gros-10 dead.
 func sampleDetail() models.ClusterDetail {
-	gros := models.Cluster{UID: "gros", Model: "Dell PowerEdge R640", Queues: []string{"default", "admin"}}
+	gros := models.Cluster{UID: "gros", Model: "Dell PowerEdge R640", Queues: []string{"default", "admin"},
+		Metrics: []models.Metric{{Name: "wattmetre_power_watt", PeriodMs: 20}, {Name: "bmc_node_power_watt", PeriodMs: 5000}}}
 	hw := models.Hardware{
 		CPU: "Intel Xeon Gold 5220", Sockets: 1, Cores: 18, Threads: 36, ClockGHz: 2.2,
 		MemoryBytes: 96 << 30,
@@ -47,14 +48,16 @@ func manyNodes(n int) models.ClusterDetail {
 func TestClusterDetailViewLines(t *testing.T) {
 	v := ClusterDetailView{Detail: sampleDetail()}
 	want := []string{
-		"MODEL     Dell PowerEdge R640",
-		"QUEUES    default, admin",
-		"CPU       1 × Intel Xeon Gold 5220 · 18 cores · 36 threads · 2.2 GHz",
-		"MEMORY    96 GiB",
-		"STORAGE   480.1 GB SSD SATA · 960.2 GB SSD SATA",
-		"NETWORK   25 Gbps Ethernet",
-		"GPU       -",
-		"NODES     3 · alive 2 · free 1 · busy 1 · down 1",
+		"MODEL       Dell PowerEdge R640",
+		"QUEUES      default, admin",
+		"CPU         1 × Intel Xeon Gold 5220 · 18 cores · 36 threads · 2.2 GHz",
+		"MEMORY      96 GiB",
+		"STORAGE     480.1 GB SSD SATA · 960.2 GB SSD SATA",
+		"NETWORK     25 Gbps Ethernet",
+		"GPU         -",
+		"WATTMETER   yes · wattmetre_power_watt every 20 ms",
+		"METRICS     2: wattmetre_power_watt, bmc_node_power_watt",
+		"NODES       3 · alive 2 · free 1 · busy 1 · down 1",
 		"",
 		"NODE      STATE          NOW    JOB",
 		"gros-1    alive/free     free   next #4600 eve 18:00→19:00 (1h)",
@@ -85,7 +88,7 @@ func TestClusterDetailViewSelected(t *testing.T) {
 func TestClusterDetailViewLoading(t *testing.T) {
 	v := ClusterDetailView{Detail: models.NewClusterDetail("nancy", models.Cluster{UID: "gros", Model: "Dell"})}
 	lines := v.Lines()
-	if len(lines) != 9 || !strings.Contains(lines[2], "CPU       loading") || !strings.Contains(lines[7], "NODES     loading") || v.Selected() != -1 {
+	if len(lines) != 11 || !strings.Contains(lines[2], "CPU         loading") || !strings.Contains(lines[9], "NODES       loading") || v.Selected() != -1 {
 		t.Errorf("while loading only the info is shown: %q selected=%d", lines, v.Selected())
 	}
 	if s := Render(v, Status{Loading: true}, 100, 24); !strings.Contains(s, "Dell") || !strings.Contains(s, "loading…") {
@@ -95,7 +98,7 @@ func TestClusterDetailViewLoading(t *testing.T) {
 
 func TestClusterDetailKeepsInfoOnScreenWhileScrolling(t *testing.T) {
 	s := Render(ClusterDetailView{Detail: manyNodes(200).Move(150)}, Status{}, 100, 24)
-	for _, want := range []string{"NODES     200", "NODE ", "big-151 "} {
+	for _, want := range []string{"NODES       200", "NODE ", "big-151 "} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen missing %q:\n%s", want, s)
 		}

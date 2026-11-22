@@ -1,8 +1,10 @@
 package models
 
 // Hardware is what one node of a cluster is made of. The nodes of a
-// cluster are normally all the same, so it describes the whole cluster.
+// cluster are normally all the same, so it describes each of its Nodes.
 type Hardware struct {
+	Nodes int // how many nodes the cluster has
+
 	CPU      string  // processor model, e.g. "Intel Xeon Gold 5220"
 	Sockets  int     // CPUs per node
 	Cores    int     // cores per node, all CPUs together
@@ -39,5 +41,5 @@ type GPU struct {
 
 // IsZero is whether nothing is known about the hardware (not loaded yet).
 func (h Hardware) IsZero() bool {
-	return h.CPU == "" && h.Cores == 0 && h.MemoryBytes == 0 && len(h.Disks) == 0 && len(h.NICs) == 0 && len(h.GPUs) == 0
+	return h.Nodes == 0 && h.CPU == "" && h.Cores == 0 && h.MemoryBytes == 0 && len(h.Disks) == 0 && len(h.NICs) == 0 && len(h.GPUs) == 0
 }

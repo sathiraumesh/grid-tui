@@ -158,3 +158,61 @@ func TestBottomLine(t *testing.T) {
 		}
 	}
 }
+
+// wide is a test view with one line of 100 digits: "0123456789" ten times.
+type wide struct{ listing }
+
+func (wide) Lines() []string { return []string{strings.Repeat("0123456789", 10)} }
+
+func TestMaxScrollX(t *testing.T) {
+	// 40 columns wide: 36 inside the panel, so 100-36 = 64 to scroll.
+	if got := MaxScrollX(wide{}, 40); got != 64 {
+		t.Errorf("MaxScrollX = %d, want 64", got)
+	}
+	if MaxScrollX(listing{3}, 100) != 0 || MaxScrollX(nil, 100) != 0 {
+		t.Error("lines that fit need no scrolling")
+	}
+}
+
+func TestRenderScrollsSideways(t *testing.T) {
+	line := func(x int) string { // the panel's first content line
+		lines := strings.Split(Render(wide{}, Status{ScrollX: x}, 40, 10), "\n")
+		return lines[panelMarginY+1+panelPaddingTop]
+	}
+	if got := line(0); !strings.Contains(got, "│ 012345678901234567890123456789012345 │") {
+		t.Errorf("x=0: %q", got)
+	}
+	if got := line(5); !strings.Contains(got, "│ 567890123456789012345678901234567890 │") {
+		t.Errorf("x=5: %q", got)
+	}
+	if got := line(1000); !strings.Contains(got, "│ 456789012345678901234567890123456789 │") {
+		t.Errorf("x past the end shows the end: %q", got)
+	}
+}
+
+func TestScrollArrows(t *testing.T) {
+	bottom := func(x int) string {
+		lines := strings.Split(Render(wide{}, Status{ScrollX: x}, 60, 10), "\n")
+		return lines[len(lines)-1-panelMarginY-1]
+	}
+	if b := bottom(0); !strings.Contains(b, "▶ more") || strings.Contains(b, "◀") {
+		t.Errorf("at the left edge: %s", b)
+	}
+	if b := bottom(10); !strings.Contains(b, "◀ more ▶") {
+		t.Errorf("in the middle: %s", b)
+	}
+	if b := bottom(1000); !strings.Contains(b, "◀ more") || strings.Contains(b, "▶") {
+		t.Errorf("at the right end: %s", b)
+	}
+	if b := strings.Split(Render(listing{3}, Status{}, 60, 10), "\n"); strings.Contains(strings.Join(b, ""), "more") {
+		t.Errorf("no arrows when it fits")
+	}
+}
+
+func TestArrowsShowNextToALongCommand(t *testing.T) {
+	v := ClustersView{Clusters: sampleClusters()} // a wide table with a long command
+	lines := strings.Split(Render(v, Status{ScrollX: 8}, 60, 10), "\n")
+	if b := lines[len(lines)-1-panelMarginY-1]; !strings.Contains(b, "$ curl") || !strings.Contains(b, "◀ more ▶") {
+		t.Errorf("both the command and the arrows should show: %s", b)
+	}
+}

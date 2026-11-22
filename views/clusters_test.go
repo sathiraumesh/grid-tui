@@ -10,23 +10,32 @@ import (
 
 // sampleClusters are made-up rows for tests only.
 func sampleClusters() models.Clusters {
-	return models.NewClusters("nancy", []models.Cluster{
+	c := models.NewClusters("nancy", []models.Cluster{
 		{UID: "graffiti", Model: "Dell PowerEdge T640", Queues: []string{"production", "admin"}},
-		{UID: "gros", Model: "Dell PowerEdge R640", Queues: []string{"default", "admin"}},
+		{UID: "gros", Model: "Dell PowerEdge R640", Queues: []string{"default", "admin"},
+			Metrics: []models.Metric{{Name: "wattmetre_power_watt"}}},
+		{UID: "grouille", Model: "Dell PowerEdge R7525"},
 	})
+	c = c.WithHardware("gros", models.Hardware{
+		Nodes: 124, CPU: "Intel Xeon Gold 5220", Sockets: 1, Cores: 18, MemoryBytes: 96 << 30,
+		Disks: []models.Disk{{Kind: "SSD", Interface: "SATA", Bytes: 480e9}},
+		NICs:  []models.NIC{{Interface: "Ethernet", RateBps: 25e9}},
+	}, true)
+	return c.WithHardware("grouille", models.Hardware{}, false)
 }
 
 func TestClustersViewTable(t *testing.T) {
 	v := ClustersView{Clusters: sampleClusters()}
 	want := []string{
-		"CLUSTER    MODEL                 QUEUES",
-		"graffiti   Dell PowerEdge T640   production, admin",
-		"gros       Dell PowerEdge R640   default, admin",
+		"CLUSTER    NODES   CPU                        CORES   MEMORY   GPU   STORAGE           NETWORK            WATTMETER",
+		"graffiti   …       …                          …       …        …     …                 …                  no",
+		"gros       124     1 × Intel Xeon Gold 5220   18      96 GiB   -     480 GB SSD SATA   25 Gbps Ethernet   yes",
+		"grouille   ?       ?                          ?       ?        ?     ?                 ?                  no",
 	}
 	if got := v.Lines(); !slices.Equal(got, want) {
 		t.Errorf("Lines =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if got := v.Labels(); !slices.Equal(got, []string{"site: nancy", "clusters: 2"}) {
+	if got := v.Labels(); !slices.Equal(got, []string{"site: nancy", "clusters: 3"}) {
 		t.Errorf("Labels = %q", got)
 	}
 	if got := v.Command(); got != "curl https://api.grid5000.fr/stable/sites/nancy/clusters" {

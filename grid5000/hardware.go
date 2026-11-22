@@ -62,7 +62,8 @@ type nodeDescription struct {
 	} `json:"gpu_devices"`
 }
 
-// ClusterHardware describes the hardware of a cluster, from its first node:
+// ClusterHardware describes the hardware of a cluster, from its first node,
+// and counts its nodes:
 // GET /stable/sites/{site}/clusters/{cluster}/nodes.
 func (c *Client) ClusterHardware(ctx context.Context, site, cluster string) (models.Hardware, error) {
 	if site == "" || cluster == "" {
@@ -75,7 +76,9 @@ func (c *Client) ClusterHardware(ctx context.Context, site, cluster string) (mod
 	if len(col.Items) == 0 {
 		return models.Hardware{}, errors.New("cluster hardware: " + cluster + " has no nodes")
 	}
-	return hardwareOf(col.Items[0]), nil
+	h := hardwareOf(col.Items[0])
+	h.Nodes = len(col.Items)
+	return h, nil
 }
 
 func hardwareOf(n nodeDescription) models.Hardware {

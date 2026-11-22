@@ -11,9 +11,15 @@ import (
 // cluster is one item of GET /sites/{site}/clusters, as the API sends it.
 // Only the fields the app uses are decoded.
 type cluster struct {
-	UID    string   `json:"uid"`
-	Model  string   `json:"model"`
-	Queues []string `json:"queues"`
+	UID     string   `json:"uid"`
+	Model   string   `json:"model"`
+	Queues  []string `json:"queues"`
+	Metrics []struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Period      number `json:"period"` // milliseconds
+		Optional    bool   `json:"optional"`
+	} `json:"metrics"`
 }
 
 // ClustersPath is the API path of the clusters of site.
@@ -32,7 +38,11 @@ func (c *Client) Clusters(ctx context.Context, site string) ([]models.Cluster, e
 	}
 	clusters := make([]models.Cluster, 0, len(col.Items))
 	for _, cl := range col.Items {
-		clusters = append(clusters, models.Cluster{UID: cl.UID, Model: cl.Model, Queues: cl.Queues})
+		mc := models.Cluster{UID: cl.UID, Model: cl.Model, Queues: cl.Queues}
+		for _, m := range cl.Metrics {
+			mc.Metrics = append(mc.Metrics, models.Metric{Name: m.Name, Description: m.Description, PeriodMs: int(m.Period), Optional: m.Optional})
+		}
+		clusters = append(clusters, mc)
 	}
 	return clusters, nil
 }

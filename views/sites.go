@@ -31,7 +31,7 @@ func (v SitesView) Command() string {
 }
 
 func (v SitesView) Help() string {
-	return "↑↓ move • enter clusters • r reload • q quit"
+	return "↑↓ move • ←→ scroll • enter clusters • r reload • q quit"
 }
 
 // Lines is the sites as a table, or none while there are no sites (the

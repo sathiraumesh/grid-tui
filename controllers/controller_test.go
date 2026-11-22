@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"grid-tui/models"
+	"grid-tui/views"
 )
 
 // fakeClient answers with fixed data, or err; calls counts the loads.
@@ -97,6 +98,10 @@ func press(t *testing.T, c Controller, k string) (Controller, tea.Cmd) {
 		msg = tea.KeyMsg{Type: tea.KeyUp}
 	case "down":
 		msg = tea.KeyMsg{Type: tea.KeyDown}
+	case "left":
+		msg = tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		msg = tea.KeyMsg{Type: tea.KeyRight}
 	}
 	next, cmd := c.Update(msg)
 	return next.(Controller), cmd
@@ -136,5 +141,54 @@ func TestQuit(t *testing.T) {
 		if _, ok := cmd().(tea.QuitMsg); !ok {
 			t.Fatalf("%s should return tea.Quit", k)
 		}
+	}
+}
+
+func TestScrollSideways(t *testing.T) {
+	c, cmd := press(t, loaded(t), "enter") // nancy's clusters: a wide table
+	c = run(t, c, cmd)
+	narrow, _ := c.Update(tea.WindowSizeMsg{Width: 50, Height: 24})
+	c = narrow.(Controller)
+
+	c, _ = press(t, c, "right")
+	if c.scrollX != scrollStep {
+		t.Fatalf("→: scrollX = %d, want %d", c.scrollX, scrollStep)
+	}
+	c, _ = press(t, c, "h")
+	if c.scrollX != 0 {
+		t.Errorf("h: scrollX = %d, want 0", c.scrollX)
+	}
+	c, _ = press(t, c, "left")
+	if c.scrollX != 0 {
+		t.Errorf("can't scroll past the left edge: %d", c.scrollX)
+	}
+	for range 100 {
+		c, _ = press(t, c, "l")
+	}
+	if want := views.MaxScrollX(views.For(c.Model()), 50); c.scrollX != want || want == 0 {
+		t.Errorf("should stop at the widest line's end: scrollX = %d, want %d", c.scrollX, want)
+	}
+
+	// A wider terminal needs less scrolling.
+	wide, _ := c.Update(tea.WindowSizeMsg{Width: 400, Height: 24})
+	if wide.(Controller).scrollX != 0 {
+		t.Errorf("everything fits at 400 columns: scrollX = %d", wide.(Controller).scrollX)
+	}
+
+	// Going back starts the sites at their left edge.
+	c, _ = press(t, c, "esc")
+	if c.scrollX != 0 {
+		t.Errorf("esc: scrollX = %d, want 0", c.scrollX)
+	}
+}
+
+func TestOpeningAScreenStartsAtTheLeft(t *testing.T) {
+	c, cmd := press(t, loaded(t), "enter")
+	c = run(t, c, cmd)
+	narrow, _ := c.Update(tea.WindowSizeMsg{Width: 50, Height: 24})
+	c, _ = press(t, narrow.(Controller), "right")
+	c, _ = press(t, c, "enter") // open a cluster
+	if c.scrollX != 0 {
+		t.Errorf("a new screen should start at the left: %d", c.scrollX)
 	}
 }

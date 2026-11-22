@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"grid-tui/models"
 )
@@ -68,11 +69,13 @@ const defaultHelp = "q quit"
 // emptyText is shown inside the panel while the view has no lines.
 const emptyText = "nothing to show yet"
 
-// Status is how the last load went, shown on the bottom line instead of
-// the help while there is something to say.
+// Status is the state of the screen besides the view: how the last load
+// went (shown on the bottom line instead of the help while there is
+// something to say) and how far the panel is scrolled sideways.
 type Status struct {
 	Loading bool  // a load is on its way
 	Err     error // the last load failed
+	ScrollX int   // columns scrolled to the right; see MaxScrollX
 }
 
 // Render draws the whole screen for v, exactly width × height cells. v may
@@ -93,7 +96,7 @@ func Render(v View, status Status, width, height int) string {
 	// MaxWidth cuts the line at the terminal edge: a wrapped line would be
 	// an extra row and push the panel off the top.
 	bottom := lipgloss.NewStyle().MaxWidth(width).Render(bottomLine(status, help))
-	return lipgloss.JoinVertical(lipgloss.Left, panel(v, width, height), bottom)
+	return lipgloss.JoinVertical(lipgloss.Left, panel(v, status.ScrollX, width, height), bottom)
 }
 
 // bottomLine is the error (red, then the help), "loading…", or the help.
@@ -109,11 +112,42 @@ func bottomLine(s Status, help string) string {
 	return Help.Render(help)
 }
 
+// innerWidth is how many columns fit inside the panel: the terminal's
+// width minus the border and the padding on each side.
+func innerWidth(width int) int { return max(width-4, 1) }
+
+// MaxScrollX is how far v can be scrolled to the right on a terminal
+// width columns wide: until its widest line's end shows. 0 if it fits.
+func MaxScrollX(v View, width int) int {
+	if v == nil {
+		return 0
+	}
+	widest := 0
+	for _, l := range v.Lines() {
+		widest = max(widest, lipgloss.Width(l))
+	}
+	return max(widest-innerWidth(width), 0)
+}
+
 // ContentHeight is how many rows fit inside the panel: the terminal's
 // height minus the bottom line, the margins, the panel's top and bottom
 // border and the empty row under the top border. It is at least 1.
 func ContentHeight(height int) int {
 	return max(height-1-2*panelMarginY-2-panelPaddingTop, 1)
+}
+
+// scrollArrows is "◀ ▶" with only the sides there is more on, e.g. "◀" at
+// the right end, or "" when everything fits.
+func scrollArrows(x, maxX int) string {
+	switch {
+	case maxX == 0:
+		return ""
+	case x == 0:
+		return "▶ more"
+	case x >= maxX:
+		return "◀ more"
+	}
+	return "◀ more ▶"
 }
 
 // window returns the lines that fit in h rows: the first pinned lines,
@@ -144,11 +178,13 @@ func window(lines []string, pinned, sel, h int) ([]string, int) {
 	return out, -1
 }
 
-// panel draws the bordered box with the view's lines and border texts.
-func panel(v View, width, height int) string {
-	panelW := width - 2  // minus the left and right border
-	innerW := panelW - 2 // minus the padding
+// panel draws the bordered box with the view's lines, scrolled scrollX
+// columns to the right, and the border texts.
+func panel(v View, scrollX, width, height int) string {
+	panelW := width - 2 // minus the left and right border
+	innerW := innerWidth(width)
 	h := ContentHeight(height)
+	scrollX = max(min(scrollX, MaxScrollX(v, width)), 0)
 
 	var labels, lines []string
 	var command string
@@ -167,13 +203,12 @@ func panel(v View, width, height int) string {
 	}
 	lines, sel = window(lines, pinned, sel, h)
 
-	// A line wider than the panel is cut off: a wrapped one would make the
-	// panel taller than the screen. The selected one is highlighted across
-	// the whole width.
-	cut := lipgloss.NewStyle().MaxWidth(innerW)
+	// Each line shows the columns [scrollX, scrollX+innerW): a wrapped line
+	// would make the panel taller than the screen. The selected one is
+	// highlighted across the whole width.
 	drawn := make([]string, len(lines))
 	for i, l := range lines {
-		drawn[i] = cut.Render(l)
+		drawn[i] = ansi.Cut(l, scrollX, scrollX+innerW)
 		if i == sel {
 			drawn[i] = Selected.Width(innerW).Render(drawn[i])
 		}
@@ -194,10 +229,18 @@ func panel(v View, width, height int) string {
 		body = withBorderText(body, edgeTop, labelRow(pills...), "", w)
 	}
 
-	// Bottom border: the API call behind the data.
+	// Bottom border: the API call behind the data, and ◀ ▶ while there is
+	// more to the left or the right.
+	arrows := scrollArrows(scrollX, MaxScrollX(v, width))
 	if command != "" {
-		cmd := lipgloss.NewStyle().MaxWidth(max(w-6, 0)).Render("$ " + command) // 6 = "└─ " + " ─┘"
-		body = withBorderText(body, edgeBottom, borderLabel(commandStyle, cmd), "", w)
+		room := w - 6 // "└─ " + " ─┘"
+		if arrows != "" {
+			room -= lipgloss.Width(borderLabel(Help, arrows)) + 1 // the arrows keep their place
+		}
+		cmd := lipgloss.NewStyle().MaxWidth(max(room, 0)).Render("$ " + command)
+		body = withBorderText(body, edgeBottom, borderLabel(commandStyle, cmd), borderLabel(Help, arrows), w)
+	} else if arrows != "" {
+		body = withBorderText(body, edgeBottom, borderLabel(Help, arrows), "", w)
 	}
 
 	// Margins are added last: the border texts need the borders to be the

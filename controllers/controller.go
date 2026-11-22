@@ -49,6 +49,7 @@ type Controller struct {
 	model    models.Model // what the panel shows now: sites, clusters or a cluster
 
 	width, height int   // 0 until the first resize
+	scrollX       int   // columns the panel is scrolled to the right
 	loading       bool  // a load for the model shown is on its way
 	err           error // the last load's error; the old data is kept
 }
@@ -76,7 +77,7 @@ func (c Controller) Init() tea.Cmd {
 
 // View draws the current model.
 func (c Controller) View() string {
-	status := views.Status{Loading: c.loading, Err: c.err}
+	status := views.Status{Loading: c.loading, Err: c.err, ScrollX: c.scrollX}
 	return views.Render(views.For(c.model), status, c.width, c.height)
 }
 
@@ -85,10 +86,13 @@ func (c Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		c.width, c.height = msg.Width, msg.Height
+		c = c.scroll(0) // a wider terminal may need less scrolling
 	case SitesLoadedMsg:
 		return c.onSitesLoaded(msg), nil
 	case ClustersLoadedMsg:
-		return c.onClustersLoaded(msg), nil
+		return c.onClustersLoaded(msg)
+	case HardwareLoadedMsg:
+		return c.onHardwareLoaded(msg), nil
 	case DetailLoadedMsg:
 		return c.onDetailLoaded(msg), nil
 	case tea.KeyMsg:
@@ -106,6 +110,10 @@ func (c Controller) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return c.move(-1), nil
 	case keyDown, keyDownAlt:
 		return c.move(1), nil
+	case keyLeft, keyLeftAlt:
+		return c.scroll(-scrollStep), nil
+	case keyRight, keyRightAlt:
+		return c.scroll(scrollStep), nil
 	case keyOpen:
 		return c.open()
 	case keyBack, keyBackAlt:
@@ -131,15 +139,49 @@ func (c Controller) move(step int) Controller {
 	return c
 }
 
+// scrollStep is how many columns ← and → scroll.
+const scrollStep = 8
+
+// scroll moves the panel sideways by step columns, from the left edge to
+// where the widest line's end shows.
+func (c Controller) scroll(step int) Controller {
+	limit := views.MaxScrollX(views.For(c.model), c.width)
+	c.scrollX = max(min(c.scrollX+step, limit), 0)
+	return c
+}
+
 // open goes one screen deeper: a site's clusters, or a cluster's detail.
 func (c Controller) open() (tea.Model, tea.Cmd) {
+	before := c.model
+	var next tea.Model = c
+	var cmd tea.Cmd
 	switch c.model.(type) {
 	case models.Sites:
-		return c.openSite()
+		next, cmd = c.openSite()
 	case models.Clusters:
-		return c.openCluster()
+		next, cmd = c.openCluster()
 	}
-	return c, nil
+	if n := next.(Controller); n.model != nil && !sameScreen(before, n.model) {
+		n.scrollX = 0 // a new screen starts at its left edge
+		return n, cmd
+	}
+	return next, cmd
+}
+
+// sameScreen is whether a and b are the same kind of model.
+func sameScreen(a, b models.Model) bool {
+	switch a.(type) {
+	case models.Sites:
+		_, ok := b.(models.Sites)
+		return ok
+	case models.Clusters:
+		_, ok := b.(models.Clusters)
+		return ok
+	case models.ClusterDetail:
+		_, ok := b.(models.ClusterDetail)
+		return ok
+	}
+	return false
 }
 
 // back goes one screen up, to the same row as before. A load still on its
@@ -153,7 +195,7 @@ func (c Controller) back() Controller {
 	default:
 		return c
 	}
-	c.loading, c.err = false, nil
+	c.loading, c.err, c.scrollX = false, nil, 0
 	return c
 }
 

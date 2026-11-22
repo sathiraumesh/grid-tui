@@ -22,6 +22,8 @@ import (
 //	│ STORAGE   480 GB SSD SATA · 960 GB SSD SATA                              │
 //	│ NETWORK   25 Gbps Ethernet                                               │
 //	│ GPU       -                                                              │
+//	│ WATTMETER yes · wattmetre_power_watt every 20 ms                         │
+//	│ METRICS   2: wattmetre_power_watt, bmc_node_power_watt                   │
 //	│ NODES     3 · alive 2 · free 1 · busy 1 · down 1                         │
 //	│                                                                          │
 //	│ NODE      STATE          NOW    JOB                                      │
@@ -52,7 +54,7 @@ func (v ClusterDetailView) Command() string {
 }
 
 func (v ClusterDetailView) Help() string {
-	return "↑↓ move • esc clusters • r reload • q quit"
+	return "↑↓ move • ←→ scroll • esc clusters • r reload • q quit"
 }
 
 // Lines is the cluster's info, then its nodes as a table. While the nodes
@@ -93,6 +95,8 @@ func (v ClusterDetailView) info() []string {
 		{"STORAGE", hw(disks(h.Disks))},
 		{"NETWORK", hw(nics(h.NICs))},
 		{"GPU", hw(gpus(h.GPUs))},
+		{"WATTMETER", wattmeter(d.Cluster)},
+		{"METRICS", metrics(d.Cluster.Metrics)},
 		{"NODES", nodes},
 	})[1:] // no titles: just the aligned rows
 	return append(info, "")
@@ -107,6 +111,32 @@ func (v ClusterDetailView) Selected() int {
 		return -1
 	}
 	return len(v.info()) + 1 + v.Detail.Cursor
+}
+
+// wattmeter is "yes · wattmetre_power_watt every 20 ms" or "no".
+func wattmeter(c models.Cluster) string {
+	for _, m := range c.Metrics {
+		if strings.HasPrefix(m.Name, "wattmetre") {
+			text := "yes · " + m.Name
+			if m.PeriodMs > 0 {
+				text += fmt.Sprintf(" every %d ms", m.PeriodMs)
+			}
+			return text
+		}
+	}
+	return "no"
+}
+
+// metrics is e.g. "3: bmc_node_power_watt, prom_node_load1, wattmetre_power_watt".
+func metrics(ms []models.Metric) string {
+	if len(ms) == 0 {
+		return "-"
+	}
+	names := make([]string, len(ms))
+	for i, m := range ms {
+		names[i] = m.Name
+	}
+	return strconv.Itoa(len(ms)) + ": " + strings.Join(names, ", ")
 }
 
 // cpu is e.g. "2 × Intel Xeon Gold 5220 · 36 cores · 72 threads · 2.2 GHz".
