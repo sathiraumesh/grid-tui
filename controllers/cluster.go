@@ -62,6 +62,7 @@ func (c Controller) openCluster() (tea.Model, tea.Cmd) {
 	if !ok {
 		return c, nil
 	}
+	c.returnTo = c.clusters
 	c.model = models.NewClusterDetail(c.clusters.Site, cl)
 	c.loading, c.err = true, nil
 	return c, loadDetail(c.client, c.clusters.Site, cl.UID)
@@ -71,6 +72,9 @@ func (c Controller) openCluster() (tea.Model, tea.Cmd) {
 // cluster on screen: after esc, or for another cluster, they arrive too
 // late and are dropped. A part that failed keeps what was there before.
 func (c Controller) onDetailLoaded(msg DetailLoadedMsg) Controller {
+	if g, onGantt := c.model.(models.Gantt); onGantt {
+		return c.onGanttLoaded(g, msg)
+	}
 	d, ok := c.model.(models.ClusterDetail)
 	if !ok || d.Site != msg.Site || d.Cluster.UID != msg.Cluster {
 		return c
@@ -82,6 +86,24 @@ func (c Controller) onDetailLoaded(msg DetailLoadedMsg) Controller {
 		d = d.WithHardware(msg.Hardware)
 	}
 	c.model = d
+	c.loading, c.err = false, msg.Err()
+	return c
+}
+
+// onGanttLoaded stores the nodes in the time line on screen, keeping its
+// zoom and cursors, if they are for its cluster.
+func (c Controller) onGanttLoaded(g models.Gantt, msg DetailLoadedMsg) Controller {
+	d := g.Detail
+	if d.Site != msg.Site || d.Cluster.UID != msg.Cluster {
+		return c
+	}
+	if msg.NodesErr == nil {
+		d = d.WithNodes(msg.Nodes, msg.At)
+	}
+	if msg.HardwareErr == nil {
+		d = d.WithHardware(msg.Hardware)
+	}
+	c.model = g.WithDetail(d)
 	c.loading, c.err = false, msg.Err()
 	return c
 }

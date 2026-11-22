@@ -7,6 +7,8 @@
 //	sites.go      SitesView, for models.Sites
 //	clusters.go   ClustersView, for models.Clusters
 //	cluster.go    ClusterDetailView, for models.ClusterDetail
+//	search.go     SearchView, for models.Search
+//	gantt.go      GanttView, for models.Gantt: the reservations on a time line
 //
 // Every view implements View, so Render draws them all the same way: a
 // bordered panel with labels on top, a command below and a help line.
@@ -43,6 +45,28 @@ type Selectable interface {
 	Selected() int
 }
 
+// Fitted is a View that draws its lines for the panel's width (a time
+// line fills it). Render calls LinesFor instead of Lines.
+type Fitted interface {
+	View
+	LinesFor(width int) []string
+}
+
+// Focused is a View that keeps line Focus() on screen without
+// highlighting it (its own colours stay).
+type Focused interface {
+	View
+	Focus() int
+}
+
+// linesOf is v's lines for a terminal width columns wide.
+func linesOf(v View, width int) []string {
+	if f, ok := v.(Fitted); ok {
+		return f.LinesFor(innerWidth(width))
+	}
+	return v.Lines()
+}
+
 // Pinned is a View whose first Pinned() lines (info, column titles) stay
 // on screen while the rest scrolls.
 type Pinned interface {
@@ -59,6 +83,10 @@ func For(m models.Model) View {
 		return ClustersView{Clusters: m}
 	case models.ClusterDetail:
 		return ClusterDetailView{Detail: m}
+	case models.Search:
+		return SearchView{Search: m}
+	case models.Gantt:
+		return GanttView{Gantt: m}
 	}
 	return nil
 }
@@ -123,7 +151,7 @@ func MaxScrollX(v View, width int) int {
 		return 0
 	}
 	widest := 0
-	for _, l := range v.Lines() {
+	for _, l := range linesOf(v, width) {
 		widest = max(widest, lipgloss.Width(l))
 	}
 	return max(widest-innerWidth(width), 0)
@@ -188,11 +216,14 @@ func panel(v View, scrollX, width, height int) string {
 
 	var labels, lines []string
 	var command string
-	sel, pinned := -1, 0
+	sel, pinned, highlight := -1, 0, false
 	if v != nil {
-		labels, command, lines = v.Labels(), v.Command(), v.Lines()
+		labels, command, lines = v.Labels(), v.Command(), linesOf(v, width)
+		if f, ok := v.(Focused); ok {
+			sel, highlight = f.Focus(), false
+		}
 		if s, ok := v.(Selectable); ok {
-			sel = s.Selected()
+			sel, highlight = s.Selected(), true
 		}
 		if p, ok := v.(Pinned); ok {
 			pinned = p.Pinned()
@@ -209,7 +240,7 @@ func panel(v View, scrollX, width, height int) string {
 	drawn := make([]string, len(lines))
 	for i, l := range lines {
 		drawn[i] = ansi.Cut(l, scrollX, scrollX+innerW)
-		if i == sel {
+		if i == sel && highlight {
 			drawn[i] = Selected.Width(innerW).Render(drawn[i])
 		}
 	}

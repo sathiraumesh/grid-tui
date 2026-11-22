@@ -8,11 +8,17 @@
 //	sites.go      the list of sites: load them, enter opens a site
 //	clusters.go   the clusters of a site: load them, enter opens a cluster
 //	cluster.go    one cluster in detail: its hardware, nodes and their jobs
+//	search.go     the clusters of every site that meet some requirements
+//	gantt.go      a cluster's reservations on a time line
 //
 // The screens, and the keys between them:
 //
-//	Sites ──enter──▶ Clusters of a site ──enter──▶ Cluster detail
-//	      ◀──esc───                     ◀──esc───
+//	Sites ──enter──▶ Clusters of a site ──enter──▶ Cluster detail ──enter──▶ Reservations
+//	      ◀──esc───          │          ◀──esc───        ▲        ◀──esc───      ▲
+//	  │                      └──────────g─────────────────┼────────────────────────┘ esc back to the clusters
+//	  │                                                   │ enter on a result,
+//	  └──/──▶ Search ─────────────────────────────────────┘ esc back to the search
+//	        ◀──esc──
 //
 // Calling the API can take seconds, so it never runs in Update: Update
 // returns a command, Bubble Tea runs it in the background, and its result
@@ -44,9 +50,12 @@ type Controller struct {
 
 	// The lists are kept while a deeper screen is shown, so esc returns to
 	// the same row.
-	sites    models.Sites
-	clusters models.Clusters
-	model    models.Model // what the panel shows now: sites, clusters or a cluster
+	sites     models.Sites
+	clusters  models.Clusters
+	search    models.Search
+	returnTo  models.Model // where esc goes from a cluster's detail: its clusters, or the search
+	ganttFrom models.Model // where esc goes from the reservations: the detail, or the clusters
+	model     models.Model // what the panel shows now
 
 	width, height int   // 0 until the first resize
 	scrollX       int   // columns the panel is scrolled to the right
@@ -93,6 +102,8 @@ func (c Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return c.onClustersLoaded(msg)
 	case HardwareLoadedMsg:
 		return c.onHardwareLoaded(msg), nil
+	case SiteIndexedMsg:
+		return c.onSiteIndexed(msg), nil
 	case DetailLoadedMsg:
 		return c.onDetailLoaded(msg), nil
 	case tea.KeyMsg:
@@ -103,6 +114,12 @@ func (c Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // onKey is what each key does.
 func (c Controller) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch c.model.(type) {
+	case models.Search:
+		return c.onSearchKey(msg) // the form takes digits and space
+	case models.Gantt:
+		return c.onGanttKey(msg) // ←→ move through time
+	}
 	switch msg.String() {
 	case keyQuit, keyCtrlC:
 		return c, tea.Quit
@@ -116,6 +133,14 @@ func (c Controller) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return c.scroll(scrollStep), nil
 	case keyOpen:
 		return c.open()
+	case keySearch:
+		if _, onSites := c.model.(models.Sites); onSites {
+			return c.openSearch()
+		}
+	case keyGantt:
+		if _, onClusters := c.model.(models.Clusters); onClusters {
+			return c.openGantt()
+		}
 	case keyBack, keyBackAlt:
 		return c.back(), nil
 	case keyReload:
@@ -160,6 +185,8 @@ func (c Controller) open() (tea.Model, tea.Cmd) {
 		next, cmd = c.openSite()
 	case models.Clusters:
 		next, cmd = c.openCluster()
+	case models.ClusterDetail:
+		next, cmd = c.openGantt()
 	}
 	if n := next.(Controller); n.model != nil && !sameScreen(before, n.model) {
 		n.scrollX = 0 // a new screen starts at its left edge
@@ -180,6 +207,12 @@ func sameScreen(a, b models.Model) bool {
 	case models.ClusterDetail:
 		_, ok := b.(models.ClusterDetail)
 		return ok
+	case models.Search:
+		_, ok := b.(models.Search)
+		return ok
+	case models.Gantt:
+		_, ok := b.(models.Gantt)
+		return ok
 	}
 	return false
 }
@@ -190,7 +223,10 @@ func (c Controller) back() Controller {
 	switch c.model.(type) {
 	case models.ClusterDetail:
 		c.model = c.clusters
-	case models.Clusters:
+		if c.returnTo != nil {
+			c.model = c.returnTo
+		}
+	case models.Clusters, models.Search:
 		c.model = c.sites
 	default:
 		return c
@@ -210,6 +246,8 @@ func (c Controller) reload() (tea.Model, tea.Cmd) {
 		return c, loadClusters(c.client, m.Site)
 	case models.ClusterDetail:
 		return c, loadDetail(c.client, m.Site, m.Cluster.UID)
+	case models.Gantt:
+		return c, loadDetail(c.client, m.Detail.Site, m.Detail.Cluster.UID)
 	default:
 		return c, loadSites(c.client)
 	}

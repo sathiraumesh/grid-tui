@@ -73,7 +73,7 @@ func TestClusterDetailViewLines(t *testing.T) {
 	if got := v.Command(); got != "curl https://api.grid5000.fr/stable/sites/nancy/clusters/gros/status" {
 		t.Errorf("Command = %q", got)
 	}
-	if !strings.Contains(v.Help(), "esc clusters") {
+	if !strings.Contains(v.Help(), "enter reservations") {
 		t.Errorf("Help = %q", v.Help())
 	}
 }

@@ -33,7 +33,7 @@ func (v ClustersView) Command() string {
 }
 
 func (v ClustersView) Help() string {
-	return "↑↓ move • ←→ scroll • enter details • esc sites • r reload • q quit"
+	return "↑↓ move • ←→ scroll • enter details • g reservations • esc sites • r reload • q quit"
 }
 
 // Lines is the clusters as a table, or none while there are none (or they

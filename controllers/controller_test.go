@@ -63,7 +63,9 @@ var nodesByCluster = map[string][]models.NodeStatus{
 }
 
 var hardwareByCluster = map[string]models.Hardware{
-	"gros": {CPU: "Intel Xeon Gold 5220", Sockets: 1, Cores: 18, Threads: 36, MemoryBytes: 96 << 30},
+	"gros":      {Nodes: 2, CPU: "Intel Xeon Gold 5220", Sockets: 1, Cores: 18, Threads: 36, MemoryBytes: 96 << 30},
+	"graffiti":  {Nodes: 1, CPU: "Intel Xeon Silver 4110", Sockets: 2, Cores: 16, MemoryBytes: 128 << 30},
+	"paravance": {Nodes: 72, CPU: "Intel Xeon E5-2630 v3", Sockets: 2, Cores: 16, MemoryBytes: 128 << 30},
 }
 
 var working = fakeClient{sites: twoSites, clusters: clustersBySite, nodes: nodesByCluster, hardware: hardwareByCluster}
@@ -102,6 +104,10 @@ func press(t *testing.T, c Controller, k string) (Controller, tea.Cmd) {
 		msg = tea.KeyMsg{Type: tea.KeyLeft}
 	case "right":
 		msg = tea.KeyMsg{Type: tea.KeyRight}
+	case "backspace":
+		msg = tea.KeyMsg{Type: tea.KeyBackspace}
+	case " ":
+		msg = tea.KeyMsg{Type: tea.KeySpace, Runes: []rune(" ")}
 	}
 	next, cmd := c.Update(msg)
 	return next.(Controller), cmd

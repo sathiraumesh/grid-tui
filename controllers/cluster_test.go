@@ -33,7 +33,7 @@ func TestEnterOpensTheSelectedCluster(t *testing.T) {
 		t.Fatalf("after load: loading=%v %+v", c.loading, d)
 	}
 	v := c.View()
-	for _, want := range []string{"cluster: gros", "nodes: 2", "MODEL       Dell PowerEdge R640", "gros-1", "/clusters/gros/status", "esc clusters"} {
+	for _, want := range []string{"cluster: gros", "nodes: 2", "MODEL       Dell PowerEdge R640", "gros-1", "/clusters/gros/status", "enter reservations"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("view missing %q:\n%s", want, v)
 		}

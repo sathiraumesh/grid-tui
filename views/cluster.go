@@ -54,7 +54,7 @@ func (v ClusterDetailView) Command() string {
 }
 
 func (v ClusterDetailView) Help() string {
-	return "↑↓ move • ←→ scroll • esc clusters • r reload • q quit"
+	return "↑↓ move • ←→ scroll • enter reservations • esc back • r reload • q quit"
 }
 
 // Lines is the cluster's info, then its nodes as a table. While the nodes
