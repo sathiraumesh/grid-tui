@@ -28,8 +28,9 @@ import (
 //	           18:00       00:00       06:00
 //	  FREE     ▄▄▄▁▁▄██████████████
 //	               ▲
-//	  gros-1   #4521█··#4600█···············
-//	▸ gros-2   ░·····#4600█·················
+//	           ┃
+//	  gros-1   ┃4521█··#4600█···············
+//	▸ gros-2   ┃·····#4600█·················
 //	  gros-3   ××××××××××××××××××××××××
 type GanttView struct {
 	Gantt models.Gantt
@@ -65,7 +66,11 @@ const ganttHeader = 8
 
 func (v GanttView) Labels() []string {
 	d := v.Gantt.Detail
-	return []string{"site: " + d.Site, "cluster: " + d.Cluster.UID, "reservations", "zoom: " + duration(v.Gantt.Cell())}
+	labels := []string{"site: " + d.Site, "cluster: " + d.Cluster.UID, "reservations: " + v.Gantt.Mode.String()}
+	if v.Gantt.Mode == models.ModeTimeline {
+		labels = append(labels, "zoom: "+duration(v.Gantt.Cell()))
+	}
+	return labels
 }
 
 func (v GanttView) Command() string {
@@ -74,18 +79,39 @@ func (v GanttView) Command() string {
 }
 
 func (v GanttView) Help() string {
-	return "↑↓ nodes • ←→ time (H L a day) • [ ] jobs • + - zoom • n now • esc detail • r reload • q quit"
+	switch v.Gantt.Mode {
+	case models.ModeWeek:
+		return "←→ days • ↑↓ slots • [ ] weeks • enter time line • t w m view • n now • esc back • r reload • q quit"
+	case models.ModeMonth:
+		return "←→ days • ↑↓ weeks • [ ] months • enter time line • t w m view • n now • esc back • r reload • q quit"
+	}
+	return "↑↓ nodes • ←→ time (H L a day) • [ ] jobs • + - zoom • t w m view • n now • esc back • r reload • q quit"
 }
 
 // Lines is the time line for a 100 columns wide panel.
 func (v GanttView) Lines() []string { return v.LinesFor(100) }
 
-// Pinned keeps the info and the time axis on screen.
-func (v GanttView) Pinned() int { return ganttHeader }
+// Pinned keeps the info and the time axis (or the day names) on screen.
+func (v GanttView) Pinned() int {
+	switch v.Gantt.Mode {
+	case models.ModeWeek:
+		return weekHeader
+	case models.ModeMonth:
+		return monthHeader
+	}
+	return ganttHeader
+}
 
-// Focus is the selected node's row.
+// Focus is the selected node's row, the cursor's slot or its day.
 func (v GanttView) Focus() int {
-	if v.Gantt.Len() == 0 {
+	switch {
+	case v.Gantt.Detail.At.IsZero():
+		return -1
+	case v.Gantt.Mode == models.ModeWeek:
+		return v.weekFocus()
+	case v.Gantt.Mode == models.ModeMonth:
+		return v.monthFocus()
+	case v.Gantt.Len() == 0:
 		return -1
 	}
 	return ganttHeader + v.Gantt.Detail.Cursor
@@ -96,6 +122,13 @@ func (v GanttView) LinesFor(width int) []string {
 	g := v.Gantt
 	if g.Detail.At.IsZero() {
 		return nil // still loading: the panel says there is nothing yet
+	}
+	fit := func(s string) string { return ansi.Truncate(s, width, "…") } // no sideways scrolling
+	switch g.Mode {
+	case models.ModeWeek:
+		return fitAll(v.weekLines(width), fit)
+	case models.ModeMonth:
+		return fitAll(v.monthLines(width), fit)
 	}
 	nameW := lipgloss.Width("FREE")
 	for _, n := range g.Detail.Nodes {
@@ -111,16 +144,15 @@ func (v GanttView) LinesFor(width int) []string {
 	}
 	end := min(first+cols, g.MaxCol()+1)
 
-	fit := func(s string) string { return ansi.Truncate(s, width, "…") } // no sideways scrolling
 	lines := []string{
 		fit(Help.Render(v.zoomLine())),
 		fit(v.selectedLine()),
 		fit(legend()),
 		"",
-		strings.Repeat(" ", left) + v.dayRow(first, end),
-		strings.Repeat(" ", left) + v.hourRow(first, end),
+		strings.Repeat(" ", left) + nowThrough(v.dayRow(first, end), g.NowCol()-first),
+		strings.Repeat(" ", left) + nowThrough(v.hourRow(first, end), g.NowCol()-first),
 		"  " + pad("FREE", nameW) + " " + v.freeRow(first, end),
-		strings.Repeat(" ", left+g.Col-first) + "▲",
+		strings.Repeat(" ", left) + nowThrough(cursorRow(g.Col-first, end-first), g.NowCol()-first),
 	}
 	if g.Len() == 0 {
 		return append(lines, Help.Render("no nodes"))
@@ -144,17 +176,17 @@ func (v GanttView) LinesFor(width int) []string {
 // zoomLine is e.g. "zoom 1h per cell · Sun 22 14:00 → Sun 29 14:00 · cursor 18:00".
 func (v GanttView) zoomLine() string {
 	g := v.Gantt
-	now := g.Detail.At
+	now := g.Now()
 	last := g.CellStart(g.MaxCol() + 1)
-	return fmt.Sprintf("zoom %s per cell · %s → %s · cursor %s",
-		duration(g.Cell()), clock(g.Origin(), now.Add(-48*time.Hour)), clock(last, now), clock(g.CursorTime(), now))
+	return fmt.Sprintf("now %s · zoom %s per cell · %s → %s · cursor %s",
+		now.Format("15:04"), duration(g.Cell()), clock(g.Origin(), now.Add(-48*time.Hour)), clock(last, now), clock(g.CursorTime(), now))
 }
 
 // selectedLine describes the selected node at the time cursor: its job,
 // or how long it is free.
 func (v GanttView) selectedLine() string {
 	g := v.Gantt
-	now := g.Detail.At
+	now := g.Now()
 	n, r, has := g.Selected()
 	switch {
 	case g.Len() == 0:
@@ -213,6 +245,28 @@ func (v GanttView) hourRow(first, end int) string {
 	return string(row)
 }
 
+// cursorRow is a row of n spaces with ▲ at i.
+func cursorRow(i, n int) string {
+	row := []rune(strings.Repeat(" ", n))
+	if i >= 0 && i < n {
+		row[i] = '▲'
+	}
+	return strings.TrimRight(string(row), " ")
+}
+
+// nowThrough draws the red now line at column i of a plain row, where it
+// is blank (a label or the ▲ there stays).
+func nowThrough(row string, i int) string {
+	r := []rune(row)
+	for len(r) <= i && i >= 0 {
+		r = append(r, ' ')
+	}
+	if i < 0 || r[i] != ' ' {
+		return row
+	}
+	return string(r[:i]) + nowStyle.Bold(true).Render("┃") + strings.TrimRight(string(r[i+1:]), " ")
+}
+
 // labelStep is how often to write a time: the shortest round period at
 // least 6 cells long ("18:00" and a space), or 0 if none (days only).
 func labelStep(cell time.Duration) time.Duration {
@@ -257,8 +311,8 @@ func (v GanttView) freeRow(first, end int) string {
 }
 
 // nodeRow draws one node's cells: its jobs in their colours with their
-// numbers, besteffort ░, free ·, now │, down ×. The cell under the cursor
-// of the selected node is reversed.
+// numbers, besteffort ░, free ·, down ×, and the time now as a red ┃.
+// The cell under the cursor of the selected node is reversed.
 func (v GanttView) nodeRow(n models.NodeStatus, first, end int, selID int64, selected bool, colors map[int64]lipgloss.Color) string {
 	g := v.Gantt
 	type cell struct {
@@ -266,6 +320,7 @@ func (v GanttView) nodeRow(n models.NodeStatus, first, end int, selID int64, sel
 		key   string
 		style lipgloss.Style
 	}
+	nowCol := g.NowCol()
 	cells := make([]cell, 0, end-first)
 	ids := make([]int64, 0, end-first) // the job in each cell, -1 if none
 	for col := first; col < end; col++ {
@@ -284,8 +339,6 @@ func (v GanttView) nodeRow(n models.NodeStatus, first, end int, selID int64, sel
 			c = cell{"█", "job" + strconv.FormatInt(r.JobID, 10), lipgloss.NewStyle().Foreground(fg)}
 		case has:
 			c = cell{"░", "be", beStyle}
-		case col == 0:
-			c = cell{"│", "now", nowStyle} // the cell holding now
 		}
 		if selected && col == g.Col {
 			c.style, c.key = c.style.Reverse(true), c.key+"cur"
@@ -323,6 +376,19 @@ func (v GanttView) nodeRow(n models.NodeStatus, first, end int, selID int64, sel
 			}
 		}
 		i = j
+	}
+
+	// The time now: a red line down every row, over jobs too (on a job its
+	// colour stays behind the line).
+	if i := nowCol - first; i >= 0 && i < len(cells) {
+		line := nowStyle.Bold(true)
+		if ids[i] >= 0 {
+			line = line.Background(colors[ids[i]])
+		}
+		if selected && nowCol == g.Col {
+			line = line.Reverse(true)
+		}
+		cells[i] = cell{"┃", "now", line}
 	}
 
 	var r runs
@@ -393,6 +459,14 @@ func (r *runs) String() string {
 		r.flush()
 	}
 	return r.b.String()
+}
+
+// fitAll cuts every line with fit.
+func fitAll(lines []string, fit func(string) string) []string {
+	for i, l := range lines {
+		lines[i] = fit(l)
+	}
+	return lines
 }
 
 // pad is s followed by spaces up to w columns.

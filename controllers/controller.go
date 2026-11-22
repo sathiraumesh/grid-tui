@@ -57,6 +57,7 @@ type Controller struct {
 	ganttFrom models.Model // where esc goes from the reservations: the detail, or the clusters
 	model     models.Model // what the panel shows now
 
+	clockGen      int   // the reservations' clock: ticks of older ones are dropped
 	width, height int   // 0 until the first resize
 	scrollX       int   // columns the panel is scrolled to the right
 	loading       bool  // a load for the model shown is on its way
@@ -104,6 +105,8 @@ func (c Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return c.onHardwareLoaded(msg), nil
 	case SiteIndexedMsg:
 		return c.onSiteIndexed(msg), nil
+	case clockMsg:
+		return c.onClock(msg)
 	case DetailLoadedMsg:
 		return c.onDetailLoaded(msg), nil
 	case tea.KeyMsg:

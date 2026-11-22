@@ -2,8 +2,10 @@ package controllers
 
 import (
 	"context"
+	"os"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -77,13 +79,30 @@ func sized(t *testing.T, c Controller) Controller {
 	return next.(Controller)
 }
 
+// TestMain makes the reservations' clock tick at once, so tests don't wait.
+func TestMain(m *testing.M) {
+	clockEvery = time.Millisecond
+	os.Exit(m.Run())
+}
+
 // run runs cmd, as Bubble Tea would, and feeds its message back to Update.
+// A batch's commands all run; the commands their messages start don't.
 func run(t *testing.T, c Controller, cmd tea.Cmd) Controller {
 	t.Helper()
 	if cmd == nil {
 		t.Fatal("expected a command")
 	}
-	next, _ := c.Update(cmd())
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, sub := range batch {
+			if sub != nil {
+				next, _ := c.Update(sub())
+				c = next.(Controller)
+			}
+		}
+		return c
+	}
+	next, _ := c.Update(msg)
 	return next.(Controller)
 }
 

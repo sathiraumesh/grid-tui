@@ -48,9 +48,6 @@ func TestMoveSelectsANode(t *testing.T) {
 	if n, _ := c.Model().(models.ClusterDetail).Selected(); n.Name != "gros-2" {
 		t.Errorf("selected = %q, want gros-2", n.Name)
 	}
-	if _, cmd := press(t, c, "enter"); cmd != nil {
-		t.Error("enter on a node does nothing (yet)")
-	}
 }
 
 func TestEscGoesBackToTheSameCluster(t *testing.T) {
