@@ -1,4 +1,5 @@
 from grid_tui.app import Grid5KApp
+from grid_tui.widgets.main_tabs import MainTabs
 
 
 async def test_frame_shows_title_and_subtitle():
@@ -26,3 +27,16 @@ async def test_q_quits():
     async with app.run_test() as pilot:  # pilot presses keys and clicks
         await pilot.press('q')
     assert app.return_code == 0
+
+
+async def test_number_keys_switch_tabs():
+    app = Grid5KApp()
+    async with app.run_test() as pilot:
+        tabs = app.query_one(MainTabs)
+        assert tabs.active == 'sites'
+        await pilot.press('2')
+        assert tabs.active == 'clusters'
+        await pilot.press('3')
+        assert tabs.active == 'nodes'
+        await pilot.press('1')
+        assert tabs.active == 'sites'
