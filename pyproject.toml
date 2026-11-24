@@ -1,24 +1,16 @@
 [project]
 name = "grid-tui"
 version = "0.1.0"
-description = "A terminal UI for Grid'5000, built with Textual"
+description = "A terminal UI for Grid'5000"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "textual>=8.2",
-    "httpx>=0.27",
-    "tzdata",  # Grid'5000's time zone (Europe/Paris), where the system has no zone data
-]
+dependencies = ["textual>=8.2", "httpx>=0.27", "tzdata"]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8",
-    "pytest-asyncio>=0.23",
-    "textual-dev>=1.7",
-]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "textual-dev>=1.7", "ruff>=0.6"]
 
 [project.scripts]
-grid-tui = "grid_tui.app:main"
+grid-tui = "grid_tui.app:main"     # creates the `grid-tui` command
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -29,5 +21,15 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle (PEP 8), F: pyflakes, I: import order, N: PEP 8 naming
+select = ["E", "W", "F", "I", "N"]
+
+[tool.ruff.format]
+quote-style = "single"
