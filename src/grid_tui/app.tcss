@@ -3,7 +3,9 @@
 Screen {
     background: #1e1e2e;        /* the whole app's background */
     color: #cdd6f4;             /* default text colour */
-    align: center middle;       /* centre the children */
+    align: center middle;
+    border: round #fab387;    
+    border-subtitle-color: #a6adc8;
 }
 
 #title {
@@ -21,3 +23,36 @@ Screen {
     color: #a6adc8;
     text-style: italic;
 }
+
+Footer {
+    background: #1e1e2e;
+}
+
+Footer .footer-key--key {
+    color: #fab387;
+}
+
+/* Notifications (self.notify) */
+Toast {
+    width: 40;
+    padding: 0 1;
+    background: #313244;  /* a bit lighter than the screen */
+    content-align: center middle;
+    color: #cdd6f4;
+    border: round #fab387;
+}
+
+Toast .toast--title {
+    color: #fab387;
+    text-style: bold;
+}
+
+/* One colour per severity */
+Toast.-information { border: round #a6e3a1; }   /* green */
+Toast.-information .toast--title { color: #a6e3a1; }
+
+Toast.-warning { border: round #f9e2af; }       /* yellow */
+Toast.-warning .toast--title { color: #f9e2af; }
+
+Toast.-error { border: round #f38ba8; }         /* red */
+Toast.-error .toast--title { color: #f38ba8; }
