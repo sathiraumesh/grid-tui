@@ -1,0 +1,20 @@
+/* Styles for the SitesPanel */
+
+SitesPanel {
+    height: 1fr;
+}
+
+SitesPanel DataTable {
+    height: 1fr;
+    background: #1e1e2e;
+}
+
+SitesPanel DataTable > .datatable--header {
+    color: #fab387;
+    background: #313244;
+    text-style: bold;
+}
+
+SitesPanel DataTable > .datatable--cursor {
+    background: #45475a;
+}

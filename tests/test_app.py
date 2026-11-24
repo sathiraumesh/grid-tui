@@ -1,16 +1,17 @@
 from grid_tui.app import Grid5KApp
 from grid_tui.widgets.main_tabs import MainTabs
+from tests.grid5000.fakes import fake_client
 
 
 async def test_frame_shows_title_and_subtitle():
-    app = Grid5KApp()
+    app = Grid5KApp(fake_client())
     async with app.run_test():  # runs the app headless, no real terminal
         assert app.screen.border_title == "Grid'5000"
         assert app.screen.border_subtitle == 'Powered by IP Paris'
 
 
 async def test_stylesheet_is_applied():
-    app = Grid5KApp()
+    app = Grid5KApp(fake_client())
     async with app.run_test():
         styles = app.screen.styles
         assert styles.background.hex == '#1E1E2E'
@@ -23,14 +24,14 @@ async def test_stylesheet_is_applied():
 
 
 async def test_q_quits():
-    app = Grid5KApp()
+    app = Grid5KApp(fake_client())
     async with app.run_test() as pilot:  # pilot presses keys and clicks
         await pilot.press('q')
     assert app.return_code == 0
 
 
 async def test_number_keys_switch_tabs():
-    app = Grid5KApp()
+    app = Grid5KApp(fake_client())
     async with app.run_test() as pilot:
         tabs = app.query_one(MainTabs)
         assert tabs.active == 'sites'

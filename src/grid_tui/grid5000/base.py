@@ -17,6 +17,15 @@ import httpx
 DEFAULT_BASE_URL = 'https://api.grid5000.fr/stable'
 
 
+def settings_from_env() -> dict[str, str]:
+    """The API address and login, from G5K_API, G5K_USER and G5K_PASSWORD."""
+    return {
+        'base_url': os.environ.get('G5K_API') or DEFAULT_BASE_URL,
+        'user': os.environ.get('G5K_USER', ''),
+        'password': os.environ.get('G5K_PASSWORD', ''),
+    }
+
+
 class ApiError(Exception):
     """The API answered with an error."""
 
@@ -50,11 +59,7 @@ class BaseClient:
     @classmethod
     def from_env(cls):
         """A client set up from G5K_API, G5K_USER and G5K_PASSWORD."""
-        return cls(
-            os.environ.get('G5K_API') or DEFAULT_BASE_URL,
-            os.environ.get('G5K_USER', ''),
-            os.environ.get('G5K_PASSWORD', ''),
-        )
+        return cls(**settings_from_env())
 
     async def _get(self, path: str) -> Any:
         """GET path and return the JSON answer."""

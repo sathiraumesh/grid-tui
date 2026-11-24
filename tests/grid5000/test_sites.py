@@ -14,7 +14,7 @@ SITES_ANSWER = {
 
 async def test_sites_reads_the_list():
     client = SitesClient(transport=fake_api(json=SITES_ANSWER))
-    assert await client.sites() == [
+    assert await client.list() == [
         Site(uid='nancy', name='Nancy', description='Grid5000 Nancy site'),
         Site(uid='lyon', name='Lyon', description='Grid5000 Lyon site'),
     ]
@@ -23,10 +23,10 @@ async def test_sites_reads_the_list():
 async def test_sites_calls_the_sites_path():
     seen = []
     client = SitesClient(transport=fake_api(seen=seen))
-    await client.sites()
+    await client.list()
     assert seen[0].url.path == '/stable/sites'
 
 
 async def test_missing_fields_become_empty():
     client = SitesClient(transport=fake_api(json={'items': [{'uid': 'rennes'}]}))
-    assert await client.sites() == [Site(uid='rennes')]
+    assert await client.list() == [Site(uid='rennes')]
