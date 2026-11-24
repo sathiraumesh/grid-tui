@@ -2,6 +2,10 @@ VENV   := .venv
 BIN    := $(VENV)/bin
 PYTHON := $(BIN)/python
 
+# put the venv first on PATH, so tools that start `python` get the venv's one
+export PATH := $(abspath $(BIN)):$(PATH)
+export VIRTUAL_ENV := $(abspath $(VENV))
+
 .DEFAULT_GOAL := help
 .PHONY: help venv install run dev console lint fix format check test clean
 
@@ -21,7 +25,7 @@ run: ## Run the app
 	$(BIN)/grid-tui
 
 dev: ## Run with live CSS reload (use `make console` in another terminal)
-	$(BIN)/textual run --dev src/grid_tui/app.py
+	$(BIN)/textual run --dev grid_tui.app:Grid5KApp
 
 console: ## Open the Textual dev console for logs
 	$(BIN)/textual console

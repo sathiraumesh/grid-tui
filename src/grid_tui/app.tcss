@@ -1,0 +1,23 @@
+/* Styles for the whole app. Textual CSS: https://textual.textualize.io/guide/CSS/ */
+
+Screen {
+    background: #1e1e2e;        /* the whole app's background */
+    color: #cdd6f4;             /* default text colour */
+    align: center middle;       /* centre the children */
+}
+
+#title {
+    dock: top;
+    width: 100%;
+    content-align: right middle;
+    color: #fab387;
+    text-style: bold;
+}
+
+#copyright {
+    dock: bottom;
+    width: 100%;
+    content-align: right middle;
+    color: #a6adc8;
+    text-style: italic;
+}
