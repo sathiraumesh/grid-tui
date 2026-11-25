@@ -23,7 +23,6 @@ class Grid5KApp(App):
         ('r', 'reload', 'Reload'),
         ('1', "show_tab('sites')", 'Sites'),
         ('2', "show_tab('clusters')", 'Clusters'),
-        ('3', "show_tab('nodes')", 'Nodes'),
     ]
 
     def __init__(self, client: Client | None = None) -> None:
@@ -58,7 +57,7 @@ class Grid5KApp(App):
         self.query_one(ClusterPanel).load()
 
     def action_show_tab(self, tab: str) -> None:
-        """Switch to the tab with this id (the 1, 2 and 3 keys)."""
+        """Switch to the tab with this id (the 1 and 2 keys)."""
         self.query_one(MainTabs).show(tab)
 
 

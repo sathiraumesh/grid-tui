@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from textual.widget import Widget
-from textual.widgets import Label, TabbedContent, TabPane
+from textual.widgets import TabbedContent, TabPane
 
 from grid_tui.grid5000 import Client
 from grid_tui.panels.clusters import ClusterPanel
@@ -27,14 +27,12 @@ class MainTabs(Widget):
         self.client = client
 
     def compose(self):
-        """The tabs and their panels: Sites, Clusters and Nodes."""
+        """The tabs and their panels: Sites and Clusters."""
         with TabbedContent(initial='sites'):
             with TabPane('Sites', id='sites'):
                 yield SitesPanel(self.client)
             with TabPane('Clusters', id='clusters'):
                 yield ClusterPanel(self.client)
-            with TabPane('Nodes', id='nodes'):
-                yield Label('Nodes will go here')
 
     @property
     def active(self) -> str:

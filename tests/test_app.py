@@ -41,15 +41,13 @@ async def test_q_quits():
 
 
 async def test_number_keys_switch_tabs():
-    """1, 2 and 3 switch to the Sites, Clusters and Nodes tabs."""
+    """1 and 2 switch to the Sites and Clusters tabs."""
     app = Grid5KApp(fake_client())
     async with app.run_test() as pilot:
         tabs = app.query_one(MainTabs)
         assert tabs.active == 'sites'
         await pilot.press('2')
         assert tabs.active == 'clusters'
-        await pilot.press('3')
-        assert tabs.active == 'nodes'
         await pilot.press('1')
         assert tabs.active == 'sites'
 
