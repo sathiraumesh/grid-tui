@@ -30,6 +30,12 @@ class ApiError(Exception):
     """The API answered with an error."""
 
     def __init__(self, path: str, status: int) -> None:
+        """Make the error.
+
+        Args:
+            path: The API path that was asked for, e.g. '/sites'.
+            status: The HTTP status the API answered with, e.g. 401.
+        """
         self.path = path
         self.status = status
         message = f'GET {path}: {status} {httpx.codes.get_reason_phrase(status)}'
@@ -50,6 +56,15 @@ class BaseClient:
         transport: httpx.AsyncBaseTransport | None = None,  # tests pass a fake one
         timeout: float = 30.0,
     ) -> None:
+        """Make the client.
+
+        Args:
+            base_url: The API root, e.g. 'https://api.grid5000.fr/stable'.
+            user: Your Grid'5000 login; '' on a frontend, where none is needed.
+            password: Your Grid'5000 password.
+            transport: What sends the requests; tests give a fake one.
+            timeout: How many seconds to wait for an answer.
+        """
         self.base_url = base_url.rstrip('/')
         self.user = user
         self.password = password

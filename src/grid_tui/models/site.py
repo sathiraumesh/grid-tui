@@ -1,3 +1,5 @@
+"""A Grid'5000 site."""
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 

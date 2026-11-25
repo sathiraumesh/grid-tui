@@ -1,3 +1,5 @@
+"""The tab bar at the top of the app."""
+
 from pathlib import Path
 
 from textual.widget import Widget
@@ -14,10 +16,17 @@ class MainTabs(Widget):
     DEFAULT_CSS = (Path(__file__).parent / 'main_tabs.tcss').read_text()
 
     def __init__(self, client: Client, **kwargs) -> None:
+        """Make the tabs.
+
+        Args:
+            client: How to reach the API; passed on to the panels.
+            **kwargs: Passed on to Widget, e.g. id or classes.
+        """
         super().__init__(**kwargs)
         self.client = client
 
     def compose(self):
+        """The tabs and their panels: Sites, Clusters and Nodes."""
         with TabbedContent(initial='sites'):
             with TabPane('Sites', id='sites'):
                 yield SitesPanel(self.client)

@@ -27,6 +27,15 @@ class Client:
         transport: httpx.AsyncBaseTransport | None = None,  # tests pass a fake one
         timeout: float = 30.0,
     ) -> None:
+        """Make the client and every part of it, all with these settings.
+
+        Args:
+            base_url: The API root, e.g. 'https://api.grid5000.fr/stable'.
+            user: Your Grid'5000 login; '' on a frontend, where none is needed.
+            password: Your Grid'5000 password.
+            transport: What sends the requests; tests give a fake one.
+            timeout: How many seconds to wait for an answer.
+        """
         settings = {
             'base_url': base_url,
             'user': user,

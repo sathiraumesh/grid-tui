@@ -1,3 +1,5 @@
+"""The Sites panel: a table of every Grid'5000 site."""
+
 from pathlib import Path
 
 import httpx
@@ -15,13 +17,21 @@ class SitesPanel(Widget):
     DEFAULT_CSS = (Path(__file__).parent / 'sites.tcss').read_text()
 
     def __init__(self, client: Client, **kwargs) -> None:
+        """Make the panel.
+
+        Args:
+            client: Where to load the sites from.
+            **kwargs: Passed on to Widget, e.g. id or classes.
+        """
         super().__init__(**kwargs)
         self.client = client
 
     def compose(self):
+        """The panel's widgets: one table, one row per site."""
         yield DataTable(cursor_type='row', zebra_stripes=True)
 
     def on_mount(self) -> None:
+        """Add the columns and start loading, once the panel is shown."""
         self.query_one(DataTable).add_columns('Site', 'Name', 'Description')
         self.load()
 
