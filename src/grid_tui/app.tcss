@@ -56,3 +56,15 @@ Toast.-warning .toast--title { color: #f9e2af; }
 
 Toast.-error { border: round #f38ba8; }         /* red */
 Toast.-error .toast--title { color: #f38ba8; }
+
+/* Scrollbars everywhere: thin, in the theme's colours */
+* {
+    scrollbar-size: 1 1;                     /* horizontal bar 1 row tall, vertical bar 1 column wide */
+    scrollbar-color: #fab387;                /* the part you drag: orange */
+    scrollbar-color-hover: #f9c7a3;          /* a lighter orange under the mouse */
+    scrollbar-color-active: #fab387;         /* while dragging */
+    scrollbar-background: #1e1e2e;           /* behind the line: same as the screen */
+    scrollbar-background-hover: #1e1e2e;
+    scrollbar-background-active: #1e1e2e;
+    scrollbar-corner-color: #1e1e2e;         /* the square where the two bars meet */
+}
