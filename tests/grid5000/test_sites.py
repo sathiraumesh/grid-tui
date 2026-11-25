@@ -3,7 +3,7 @@
 import pytest
 
 from grid_tui.grid5000 import ApiError, SitesClient
-from grid_tui.models import Cluster, Site
+from grid_tui.models import Site
 from tests.grid5000.fakes import CLUSTERS, SITES, fake_api, fake_grid5000
 
 SITES_ANSWER = {
@@ -47,9 +47,9 @@ async def test_list_clusters_reads_one_sites_clusters():
     client = SitesClient(transport=fake_grid5000(SITES, CLUSTERS))
     clusters = await client.list_clusters('nancy')
     assert [c.uid for c in clusters] == ['gros', 'grisou']
-    assert clusters[0] == Cluster(
-        uid='gros', model='Dell R640', queues=('default',), kavlan=True
-    )
+    gros = clusters[0]
+    assert (gros.model, gros.queues, gros.kavlan) == ('Dell R640', ('default',), True)
+    assert gros.metric_names == ('wattmetre_power_watt', 'bmc_node_power_watt')
 
 
 async def test_list_clusters_calls_the_sites_clusters_path():
@@ -97,3 +97,27 @@ async def test_all_clusters_fails_if_one_site_fails():
     client = SitesClient(transport=fake_grid5000(sites, CLUSTERS))
     with pytest.raises(ApiError):
         await client.all_clusters()
+
+
+async def test_get_cluster_reads_one_cluster():
+    """get_cluster() gives the one cluster asked for, with its metrics."""
+    client = SitesClient(transport=fake_grid5000(SITES, CLUSTERS))
+    gros = await client.get_cluster('nancy', 'gros')
+    assert gros.uid == 'gros'
+    assert gros.metric_names == ('wattmetre_power_watt', 'bmc_node_power_watt')
+
+
+async def test_get_cluster_calls_the_clusters_path():
+    """get_cluster('nancy', 'gros') asks for /sites/nancy/clusters/gros."""
+    seen = []
+    client = SitesClient(transport=fake_api(json={'uid': 'gros'}, seen=seen))
+    await client.get_cluster('nancy', 'gros')
+    assert seen[0].url.path == '/stable/sites/nancy/clusters/gros'
+
+
+async def test_get_cluster_of_an_unknown_cluster_raises():
+    """A cluster the API doesn't know raises ApiError (404)."""
+    client = SitesClient(transport=fake_grid5000(SITES, CLUSTERS))
+    with pytest.raises(ApiError) as error:
+        await client.get_cluster('nancy', 'nowhere')
+    assert error.value.status == 404

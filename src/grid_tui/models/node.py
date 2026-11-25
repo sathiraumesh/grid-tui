@@ -4,7 +4,7 @@ As GET /sites/{site}/clusters/{cluster}/nodes lists it. Sizes are in bytes,
 speeds in hertz and rates in bits per second, as the API gives them.
 """
 
-from pydantic import field_validator
+from pydantic import BaseModel, field_validator
 
 from grid_tui.models.base import ApiModel
 from grid_tui.models.cluster import Link
@@ -255,8 +255,11 @@ class Node(ApiModel):
     )
     @classmethod
     def _a_part_is_an_object(cls, value):
-        """A part that isn't an object (e.g. 'n/a') is read as empty."""
-        return value if isinstance(value, dict) else {}
+        """A part that isn't an object (e.g. 'n/a') is read as empty.
+
+        A part given ready-made, e.g. bios=Bios(...), is kept as it is.
+        """
+        return value if isinstance(value, (dict, BaseModel)) else {}
 
     @field_validator(
         'storage_devices', 'network_adapters', 'pdu', 'links', mode='before'

@@ -1,6 +1,8 @@
 """A cluster of a Grid'5000 site."""
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+
+from grid_tui.models.metric import MetricInfo
 
 
 class Link(BaseModel):
@@ -23,7 +25,7 @@ class Cluster(BaseModel):
     type: str = ''  # the kind of entry, e.g. 'cluster'
     version: str = ''  # the version of this description in the API
     queues: tuple[str, ...] = ()  # where jobs can go, e.g. ('default', 'admin')
-    metrics: tuple[str, ...] = ()  # what can be measured, e.g. ('wattmetre_power',)
+    metrics: tuple[MetricInfo, ...] = ()  # what its nodes can measure
     exotic: bool = False  # unusual hardware: must be asked for by name
     kavlan: bool = False  # can its nodes be put in their own network (KaVLAN)
     links: tuple[Link, ...] = ()  # related API pages
@@ -46,18 +48,29 @@ class Cluster(BaseModel):
 
     @field_validator('metrics', mode='before')
     @classmethod
-    def _metric_names(cls, value):
-        """Keep only the metrics' names: [{'name': 'x', ...}] → ('x',)."""
+    def _read_metrics(cls, value):
+        """Read each metric; one that can't be read is skipped, not the cluster."""
         if not isinstance(value, list):
             return ()
-        return tuple(
-            m['name']
-            for m in value
-            if isinstance(m, dict) and isinstance(m.get('name'), str)
-        )
+        metrics = []
+        for item in value:
+            try:
+                metrics.append(MetricInfo.model_validate(item))
+            except ValidationError:
+                continue  # e.g. no name, or not an object
+        return tuple(metrics)
 
     @field_validator('exotic', 'kavlan', mode='before')
     @classmethod
     def _null_is_false(cls, value):
         """A missing or null yes/no is no."""
         return False if value is None else value
+
+    @property
+    def metric_names(self) -> tuple[str, ...]:
+        """The names of the metrics, e.g. ('wattmetre_power_watt',)."""
+        return tuple(metric.name for metric in self.metrics)
+
+    def metrics_for(self, node: str) -> tuple[MetricInfo, ...]:
+        """The metrics recorded for one of the cluster's nodes, e.g. 'gros-12'."""
+        return tuple(metric for metric in self.metrics if metric.applies_to(node))

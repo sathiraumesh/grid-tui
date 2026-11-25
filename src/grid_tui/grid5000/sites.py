@@ -23,6 +23,11 @@ class SitesClient(BaseClient):
         data = await self._get(f'/sites/{quote(site, safe="")}/clusters')
         return [Cluster.model_validate(item) for item in data.get('items', [])]
 
+    async def get_cluster(self, site: str, cluster: str) -> Cluster:
+        """One cluster of a site, e.g. await get_cluster('nancy', 'gros')."""
+        path = f'/sites/{quote(site, safe="")}/clusters/{quote(cluster, safe="")}'
+        return Cluster.model_validate(await self._get(path))
+
     async def all_clusters(self) -> dict[str, list[Cluster]]:
         """The clusters of every site, by site: {'nancy': [...], 'lyon': [...]}."""
         sites = await self.list()

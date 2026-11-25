@@ -1,32 +1,20 @@
 """The Nodes panel: a table of a cluster's nodes and their hardware."""
 
+import asyncio
 from pathlib import Path
 
 import httpx
-from textual import work
+from textual import on, work
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
 
+from grid_tui.format import number, size
 from grid_tui.grid5000 import ApiError, Client
-from grid_tui.models import Node
+from grid_tui.models import Cluster, MetricInfo, Node
+from grid_tui.screens.node_details import NodeDetails
 
 HINT = 'Choose a cluster in the Clusters tab (Enter) to see its nodes.'
 COLUMNS = ('Node', 'CPU', 'GHz', 'Cores', 'Threads', 'RAM', 'Disks', 'Network', 'GPUs')
-
-
-def size(num_bytes: int) -> str:
-    """A size in bytes, for a person: 96 GiB → '96 GiB', 2 TiB → '2 TiB'."""
-    if num_bytes <= 0:
-        return ''
-    for unit, factor in (('TiB', 1024**4), ('GiB', 1024**3), ('MiB', 1024**2)):
-        if num_bytes >= factor:
-            return f'{num_bytes / factor:.3g} {unit}'
-    return f'{num_bytes} B'
-
-
-def number(value: float) -> str:
-    """A number for the table: '' for 0, so empty cells stay empty."""
-    return f'{value:g}' if value else ''
 
 
 def disks(node: Node) -> str:
@@ -98,6 +86,8 @@ class NodesPanel(Widget):
         self.client = client
         self.site = site
         self.cluster = cluster
+        self.nodes: dict[str, Node] = {}  # the nodes in the table, by uid
+        self.cluster_info: Cluster | None = None  # the cluster, for its metrics
 
     def compose(self):
         """The panel's widgets: which cluster it is, then the table of nodes."""
@@ -138,19 +128,46 @@ class NodesPanel(Widget):
             self.show([])
             return
         self.loading = True  # shows a spinner over the panel
+        self.cluster_info = None
         try:
-            nodes = await self.client.nodes.list(self.site, self.cluster)
+            # the nodes, and the cluster (for its metrics), at the same time
+            nodes, cluster = await asyncio.gather(
+                self.client.nodes.list(self.site, self.cluster),
+                self._cluster_or_none(self.site, self.cluster),
+            )
         except (ApiError, httpx.HTTPError) as error:
             self.notify(str(error), title="Couldn't load nodes", severity='error')
             self.show([])
             return
         finally:
             self.loading = False
+        self.cluster_info = cluster
         self.show(nodes)
+
+    async def _cluster_or_none(self, site: str, cluster: str) -> Cluster | None:
+        """The cluster, or None if it can't be loaded: the nodes still show."""
+        try:
+            return await self.client.sites.get_cluster(site, cluster)
+        except (ApiError, httpx.HTTPError):
+            return None
 
     def show(self, nodes: list[Node]) -> None:
         """Put nodes in the table, one row each."""
+        self.nodes = {node.uid: node for node in nodes}
         table = self.query_one(DataTable)
         table.clear()
         for node in nodes:
             table.add_row(*row(node), key=node.uid)
+
+    @on(DataTable.RowSelected)
+    def _node_chosen(self, event: DataTable.RowSelected) -> None:
+        """A row was chosen (Enter, or a click): show all of that node's details."""
+        node = self.nodes.get(event.row_key.value)
+        if node is not None:
+            self.app.push_screen(NodeDetails(node, self.metrics_for(node)))
+
+    def metrics_for(self, node: Node) -> tuple[MetricInfo, ...]:
+        """What node can measure: its cluster's metrics for it; () if unknown."""
+        if self.cluster_info is None:
+            return ()
+        return self.cluster_info.metrics_for(node.uid)

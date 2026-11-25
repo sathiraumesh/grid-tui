@@ -11,7 +11,22 @@ SITES = [
 ]
 CLUSTERS = {
     'nancy': [
-        {'uid': 'gros', 'model': 'Dell R640', 'queues': ['default'], 'kavlan': True},
+        {
+            'uid': 'gros',
+            'model': 'Dell R640',
+            'queues': ['default'],
+            'kavlan': True,
+            'metrics': [
+                {
+                    'name': 'wattmetre_power_watt',
+                    'description': 'Power from the wattmeter',
+                    'period': 1000,
+                    'optional_period': 20,
+                    'only_for': ['gros-1'],
+                },
+                {'name': 'bmc_node_power_watt', 'description': 'Power from the BMC'},
+            ],
+        },
         {'uid': 'grisou', 'model': 'Dell R630', 'queues': ['default', 'admin']},
     ],
     'lyon': [
@@ -57,6 +72,7 @@ def fake_grid5000(
 
     /sites                                       → sites
     /sites/{site}/clusters                       → clusters[site]
+    /sites/{site}/clusters/{cluster}             → that cluster
     /sites/{site}/clusters/{cluster}/nodes       → nodes[(site, cluster)]
     /sites/{site}/clusters/{cluster}/nodes/{uid} → that node
 
@@ -79,6 +95,11 @@ def fake_grid5000(
             if parts[2] not in clusters:
                 return httpx.Response(404, json={})
             return httpx.Response(200, json={'items': clusters[parts[2]]})
+        if len(parts) == 5 and parts[1] == 'sites' and parts[3] == 'clusters':
+            for cluster in clusters.get(parts[2], []):
+                if cluster['uid'] == parts[4]:
+                    return httpx.Response(200, json=cluster)
+            return httpx.Response(404, json={})
         if len(parts) in (6, 7) and parts[1] == 'sites' and parts[5] == 'nodes':
             found = nodes.get((parts[2], parts[4]))
             if found is None:

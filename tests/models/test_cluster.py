@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from grid_tui.models import Cluster, Link
+from grid_tui.models import Cluster, Link, MetricInfo
 
 # roughly what GET /sites/nancy/clusters gives for one cluster
 GROS = {
@@ -46,7 +46,8 @@ def test_reads_api_json():
     assert cluster.type == 'cluster'
     assert cluster.version == 'abc123'
     assert cluster.queues == ('default', 'admin')
-    assert cluster.metrics == ('wattmetre_power',)
+    assert cluster.metrics == (MetricInfo(name='wattmetre_power', description='Power'),)
+    assert cluster.metric_names == ('wattmetre_power',)
     assert cluster.exotic is False
     assert cluster.kavlan is True
     assert cluster.links[1] == Link(
@@ -77,7 +78,7 @@ def test_bad_metrics_are_skipped():
     cluster = Cluster.model_validate(
         {'uid': 'gros', 'metrics': [{'name': 'ok'}, 'oops', {'no_name': 1}]}
     )
-    assert cluster.metrics == ('ok',)
+    assert cluster.metric_names == ('ok',)
 
 
 def test_uid_is_required():

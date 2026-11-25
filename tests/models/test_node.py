@@ -411,3 +411,12 @@ def test_ram_from_main_memory_or_the_modules():
         }
     )
     assert node.ram_gib == 3.0
+
+
+def test_parts_given_ready_made_are_kept():
+    """A part passed as a model, e.g. bios=Bios(...), is kept, not emptied."""
+    node = Node(
+        uid='x', bios=Bios(vendor='Dell Inc.'), performance=Performance(node_flops=1)
+    )
+    assert node.bios.vendor == 'Dell Inc.'
+    assert node.performance.node_flops == 1
