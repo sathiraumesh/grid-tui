@@ -1,3 +1,5 @@
+"""Tests for BaseClient: the address, the login, GET and errors."""
+
 import pytest
 
 from grid_tui.grid5000 import ApiError, BaseClient
@@ -5,6 +7,7 @@ from tests.grid5000.fakes import fake_api
 
 
 async def test_get_calls_the_path_under_the_base_url():
+    """A path is asked for under the API root, with no double slash."""
     seen = []
     client = BaseClient('https://api.example/stable/', transport=fake_api(seen=seen))
     await client._get('/sites')
@@ -12,11 +15,13 @@ async def test_get_calls_the_path_under_the_base_url():
 
 
 async def test_get_returns_the_json():
+    """GET gives back the answer's JSON."""
     client = BaseClient(transport=fake_api(json={'items': []}))
     assert await client._get('/sites') == {'items': []}
 
 
 async def test_sends_login_when_given():
+    """With a user and password, every request carries basic auth."""
     seen = []
     client = BaseClient(user='alice', password='secret', transport=fake_api(seen=seen))
     await client._get('/sites')
@@ -24,6 +29,7 @@ async def test_sends_login_when_given():
 
 
 async def test_no_login_on_a_frontend():
+    """With no user (on a frontend), no login is sent."""
     seen = []
     client = BaseClient(transport=fake_api(seen=seen))
     await client._get('/sites')
@@ -31,6 +37,7 @@ async def test_no_login_on_a_frontend():
 
 
 async def test_error_answer_raises():
+    """An error answer raises ApiError, and a 401 says how to log in."""
     client = BaseClient(transport=fake_api(status=401))
     with pytest.raises(ApiError) as error:
         await client._get('/sites')
@@ -39,6 +46,7 @@ async def test_error_answer_raises():
 
 
 def test_from_env(monkeypatch):
+    """from_env reads the API root and the login from the environment."""
     monkeypatch.setenv('G5K_API', 'https://api.example/stable')
     monkeypatch.setenv('G5K_USER', 'alice')
     monkeypatch.setenv('G5K_PASSWORD', 'secret')

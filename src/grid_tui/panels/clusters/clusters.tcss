@@ -19,12 +19,12 @@ ClusterPanel DataTable > .datatable--cursor {
     background: #45475a;
 }
 
-/* The site dropdown: one small row, on the right */
+/* The site dropdown: one small row, on the left */
 
 ClusterPanel #toolbar {
     height: 1;
     margin-bottom: 1;
-    align-horizontal: left;       /* push the label and dropdown to the right */
+    align-horizontal: left;       /* the label and dropdown at the left */
 }
 
 ClusterPanel #site-label {

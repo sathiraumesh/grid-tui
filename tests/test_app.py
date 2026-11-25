@@ -1,3 +1,5 @@
+"""Tests for the whole app: its frame, its keys, and how the tabs work together."""
+
 from textual.widgets import DataTable, Select
 
 from grid_tui.app import Grid5KApp
@@ -9,6 +11,7 @@ from tests.panels.helpers import rows, settle
 
 
 async def test_frame_shows_title_and_subtitle():
+    """The frame shows Grid'5000 at the top and the credit at the bottom."""
     app = Grid5KApp(fake_client())
     async with app.run_test():  # runs the app headless, no real terminal
         assert app.screen.border_title == "Grid'5000"
@@ -16,6 +19,7 @@ async def test_frame_shows_title_and_subtitle():
 
 
 async def test_stylesheet_is_applied():
+    """app.tcss is loaded: the dark background and the orange frame."""
     app = Grid5KApp(fake_client())
     async with app.run_test():
         styles = app.screen.styles
@@ -29,6 +33,7 @@ async def test_stylesheet_is_applied():
 
 
 async def test_q_quits():
+    """q closes the app cleanly."""
     app = Grid5KApp(fake_client())
     async with app.run_test() as pilot:  # pilot presses keys and clicks
         await pilot.press('q')
@@ -36,6 +41,7 @@ async def test_q_quits():
 
 
 async def test_number_keys_switch_tabs():
+    """1, 2 and 3 switch to the Sites, Clusters and Nodes tabs."""
     app = Grid5KApp(fake_client())
     async with app.run_test() as pilot:
         tabs = app.query_one(MainTabs)
@@ -52,6 +58,7 @@ async def test_number_keys_switch_tabs():
 
 
 async def test_choosing_a_site_opens_its_clusters():
+    """Enter on a site opens the Clusters tab with only that site."""
     app = Grid5KApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
@@ -66,6 +73,7 @@ async def test_choosing_a_site_opens_its_clusters():
 
 
 async def test_r_reloads_sites_and_clusters():
+    """r loads both tables again."""
     app = Grid5KApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)

@@ -1,3 +1,5 @@
+"""Tests for SitesClient: the sites, and the clusters of each site."""
+
 import pytest
 
 from grid_tui.grid5000 import ApiError, SitesClient
@@ -15,6 +17,7 @@ SITES_ANSWER = {
 
 
 async def test_sites_reads_the_list():
+    """list() turns the API's items into Sites."""
     client = SitesClient(transport=fake_api(json=SITES_ANSWER))
     assert await client.list() == [
         Site(uid='nancy', name='Nancy', description='Grid5000 Nancy site'),
@@ -23,6 +26,7 @@ async def test_sites_reads_the_list():
 
 
 async def test_sites_calls_the_sites_path():
+    """list() asks for /sites."""
     seen = []
     client = SitesClient(transport=fake_api(seen=seen))
     await client.list()
@@ -30,6 +34,7 @@ async def test_sites_calls_the_sites_path():
 
 
 async def test_missing_fields_become_empty():
+    """A site with only a uid gets '' for the rest."""
     client = SitesClient(transport=fake_api(json={'items': [{'uid': 'rennes'}]}))
     assert await client.list() == [Site(uid='rennes')]
 
@@ -38,6 +43,7 @@ async def test_missing_fields_become_empty():
 
 
 async def test_list_clusters_reads_one_sites_clusters():
+    """list_clusters() turns one site's items into Clusters."""
     client = SitesClient(transport=fake_grid5000(SITES, CLUSTERS))
     clusters = await client.list_clusters('nancy')
     assert [c.uid for c in clusters] == ['gros', 'grisou']
@@ -47,6 +53,7 @@ async def test_list_clusters_reads_one_sites_clusters():
 
 
 async def test_list_clusters_calls_the_sites_clusters_path():
+    """list_clusters('nancy') asks for /sites/nancy/clusters."""
     seen = []
     client = SitesClient(transport=fake_api(seen=seen))
     await client.list_clusters('nancy')
@@ -54,6 +61,7 @@ async def test_list_clusters_calls_the_sites_clusters_path():
 
 
 async def test_list_clusters_escapes_the_site_name():
+    """A site name can't change which path is asked for."""
     seen = []
     client = SitesClient(transport=fake_api(seen=seen))
     await client.list_clusters('a/b')  # can't reach another path
@@ -61,6 +69,7 @@ async def test_list_clusters_escapes_the_site_name():
 
 
 async def test_list_clusters_of_an_unknown_site_raises():
+    """A site the API doesn't know raises ApiError (404)."""
     client = SitesClient(transport=fake_grid5000(SITES, CLUSTERS))
     with pytest.raises(ApiError) as error:
         await client.list_clusters('nowhere')
@@ -68,6 +77,7 @@ async def test_list_clusters_of_an_unknown_site_raises():
 
 
 async def test_all_clusters_gives_every_sites_clusters_by_site():
+    """all_clusters() gives each site's clusters, in the order of the sites."""
     client = SitesClient(transport=fake_grid5000(SITES, CLUSTERS))
     by_site = await client.all_clusters()
     assert list(by_site) == ['nancy', 'lyon']  # in the order of the sites
@@ -76,11 +86,13 @@ async def test_all_clusters_gives_every_sites_clusters_by_site():
 
 
 async def test_all_clusters_with_no_sites_is_empty():
+    """With no sites, all_clusters() gives {}."""
     client = SitesClient(transport=fake_grid5000())
     assert await client.all_clusters() == {}
 
 
 async def test_all_clusters_fails_if_one_site_fails():
+    """If one site's clusters fail to load, all_clusters() raises."""
     sites = [*SITES, {'uid': 'nowhere'}]  # no clusters answer for this one
     client = SitesClient(transport=fake_grid5000(sites, CLUSTERS))
     with pytest.raises(ApiError):

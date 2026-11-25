@@ -1,3 +1,5 @@
+"""Tests for MainTabs: the tab bar and switching tabs."""
+
 from textual.app import App
 from textual.widgets import TabbedContent
 
@@ -9,16 +11,19 @@ class TabsApp(App):
     """A tiny app that shows only MainTabs, to test it on its own."""
 
     def compose(self):
+        """The only widget: the tabs, with a fake client."""
         yield MainTabs(fake_client())
 
 
 async def test_starts_on_sites():
+    """The Sites tab shows first."""
     app = TabsApp()
     async with app.run_test():
         assert app.query_one(MainTabs).active == 'sites'
 
 
 async def test_has_a_tab_per_panel():
+    """There are Sites, Clusters and Nodes tabs, in that order."""
     app = TabsApp()
     async with app.run_test():
         panes = app.query_one(TabbedContent).query('TabPane')
@@ -26,6 +31,7 @@ async def test_has_a_tab_per_panel():
 
 
 async def test_show_switches_tab():
+    """show() switches to the tab with that id."""
     app = TabsApp()
     async with app.run_test():
         tabs = app.query_one(MainTabs)
@@ -35,6 +41,7 @@ async def test_show_switches_tab():
 
 
 async def test_stylesheet_is_loaded():
+    """main_tabs.tcss is loaded: the tabs fill the screen."""
     app = TabsApp()
     async with app.run_test(size=(60, 12)):
         tabs = app.query_one(MainTabs)

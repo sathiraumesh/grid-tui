@@ -1,3 +1,5 @@
+"""Tests for the Sites panel: the table of sites, and choosing one."""
+
 from textual.app import App
 from textual.widgets import DataTable
 
@@ -10,18 +12,26 @@ class SitesApp(App):
     """A tiny app that shows only the SitesPanel, and keeps the sites chosen."""
 
     def __init__(self, client) -> None:
+        """Make the app.
+
+        Args:
+            client: What the panel loads the sites from.
+        """
         super().__init__()
         self.client = client
         self.chosen: list[str] = []
 
     def compose(self):
+        """The only widget: the Sites panel."""
         yield SitesPanel(self.client)
 
     def on_sites_panel_chosen(self, message: SitesPanel.Chosen) -> None:
+        """Keep each site the panel says was chosen."""
         self.chosen.append(message.site)
 
 
 async def test_shows_a_row_per_site():
+    """Each site is one row: its uid, name and description."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
@@ -32,6 +42,7 @@ async def test_shows_a_row_per_site():
 
 
 async def test_has_the_columns():
+    """The columns are Site, Name and Description."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
@@ -40,6 +51,7 @@ async def test_has_the_columns():
 
 
 async def test_no_spinner_after_loading():
+    """The spinner is gone once the sites are in."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
@@ -47,6 +59,7 @@ async def test_no_spinner_after_loading():
 
 
 async def test_an_error_shows_a_notification_and_an_empty_table():
+    """A failed load shows a red toast and leaves the table empty."""
     app = SitesApp(g5k_client(status=401))
     async with app.run_test(notifications=True) as pilot:
         await settle(app, pilot)
@@ -58,6 +71,7 @@ async def test_an_error_shows_a_notification_and_an_empty_table():
 
 
 async def test_loading_again_does_not_add_the_rows_twice():
+    """Loading again replaces the rows instead of adding to them."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
@@ -67,6 +81,7 @@ async def test_loading_again_does_not_add_the_rows_twice():
 
 
 async def test_enter_on_a_row_sends_chosen_with_its_site():
+    """Enter on a row sends Chosen with that row's site."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
