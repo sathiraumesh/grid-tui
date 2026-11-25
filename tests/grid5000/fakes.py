@@ -20,6 +20,20 @@ CLUSTERS = {
 }
 
 
+NODES = {
+    ('nancy', 'gros'): [
+        {
+            'uid': 'gros-1',
+            'cluster': 'gros',
+            'architecture': {'nb_procs': 1, 'nb_cores': 18, 'nb_threads': 36},
+            'processor': {'other_description': 'Intel Xeon Gold 5220'},
+            'main_memory': {'ram_size': 96 * 1024**3},
+        },
+        {'uid': 'gros-2', 'cluster': 'gros'},
+    ],
+}
+
+
 def fake_api(status: int = 200, json: dict | None = None, seen: list | None = None):
     """A fake transport: answers every request with status and json,
     and keeps the requests in seen (if given) so a test can check them."""
@@ -37,16 +51,21 @@ def fake_grid5000(
     clusters: dict[str, list[dict]] | None = None,
     status: int = 200,
     seen: list | None = None,
+    nodes: dict[tuple[str, str], list[dict]] | None = None,
 ):
     """A fake transport that answers like Grid'5000, path by path:
 
-    /sites                  → sites
-    /sites/{site}/clusters  → clusters[site] (404 for a site it doesn't know)
+    /sites                                       → sites
+    /sites/{site}/clusters                       → clusters[site]
+    /sites/{site}/clusters/{cluster}/nodes       → nodes[(site, cluster)]
+    /sites/{site}/clusters/{cluster}/nodes/{uid} → that node
 
-    Every answer has this status instead, if it isn't 200 (e.g. 401).
+    Anything it doesn't know is a 404. Every answer has this status instead,
+    if it isn't 200 (e.g. 401).
     """
     sites = sites or []
     clusters = clusters or {}
+    nodes = nodes or {}
 
     def handle(request: httpx.Request) -> httpx.Response:
         if seen is not None:
@@ -60,6 +79,15 @@ def fake_grid5000(
             if parts[2] not in clusters:
                 return httpx.Response(404, json={})
             return httpx.Response(200, json={'items': clusters[parts[2]]})
+        if len(parts) in (6, 7) and parts[1] == 'sites' and parts[5] == 'nodes':
+            found = nodes.get((parts[2], parts[4]))
+            if found is None:
+                return httpx.Response(404, json={})
+            if len(parts) == 6:
+                return httpx.Response(200, json={'items': found})
+            for node in found:
+                if node['uid'] == parts[6]:
+                    return httpx.Response(200, json=node)
         return httpx.Response(404, json={})
 
     return httpx.MockTransport(handle)
@@ -69,12 +97,13 @@ def fake_client(
     sites: list[dict] | None = None,
     clusters: dict[str, list[dict]] | None = None,
     status: int = 200,
+    nodes: dict[tuple[str, str], list[dict]] | None = None,
 ) -> Client:
     """A Client talking to fake_grid5000: no sites unless given, so tests stay
     offline."""
-    return Client(transport=fake_grid5000(sites, clusters, status))
+    return Client(transport=fake_grid5000(sites, clusters, status, nodes=nodes))
 
 
 def g5k_client(status: int = 200) -> Client:
-    """A Client talking to fake_grid5000 with SITES and CLUSTERS."""
-    return fake_client(SITES, CLUSTERS, status)
+    """A Client talking to fake_grid5000 with SITES, CLUSTERS and NODES."""
+    return fake_client(SITES, CLUSTERS, status, nodes=NODES)

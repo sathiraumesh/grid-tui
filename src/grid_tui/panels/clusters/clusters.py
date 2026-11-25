@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 from textual import on, work
 from textual.containers import Horizontal
+from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable, Label, Select
 
@@ -16,6 +17,20 @@ class ClusterPanel(Widget):
     """A table of clusters, loaded from the API: every site's, or one site's."""
 
     DEFAULT_CSS = (Path(__file__).parent / 'clusters.tcss').read_text()
+
+    class Chosen(Message):
+        """Sent when a cluster is chosen in the table (Enter, or a click)."""
+
+        def __init__(self, site: str, cluster: str) -> None:
+            """Make the message.
+
+            Args:
+                site: The chosen cluster's site, e.g. 'nancy'.
+                cluster: The chosen cluster's uid, e.g. 'gros'.
+            """
+            super().__init__()
+            self.site = site
+            self.cluster = cluster
 
     def __init__(self, client: Client, site: str | None = None, **kwargs) -> None:
         """Make the panel.
@@ -117,3 +132,9 @@ class ClusterPanel(Widget):
                     'yes' if cluster.kavlan else '',
                     key=f'{site}/{cluster.uid}',
                 )
+
+    @on(DataTable.RowSelected)
+    def _cluster_chosen(self, event: DataTable.RowSelected) -> None:
+        """A row was chosen: tell the app which cluster it is."""
+        site, cluster = event.row_key.value.split('/', 1)  # the key is 'site/cluster'
+        self.post_message(self.Chosen(site, cluster))

@@ -1,10 +1,13 @@
 """The one client the app passes around: every part of the API in one place.
 
     client = Client.from_env()
-    await client.sites.list()
+    await client.sites.list()                          # every site
+    await client.sites.list_clusters('nancy')          # a site's clusters
+    await client.nodes.list('nancy', 'gros')           # a cluster's nodes
+    await client.nodes.get('nancy', 'gros', 'gros-1')  # one node
 
 To add a part, write it like sites.py and register it in __init__ below,
-e.g. self.clusters = ClustersClient(**settings).
+e.g. self.jobs = JobsClient(**settings).
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from __future__ import annotations
 import httpx
 
 from grid_tui.grid5000.base import DEFAULT_BASE_URL, settings_from_env
+from grid_tui.grid5000.nodes import NodesClient
 from grid_tui.grid5000.sites import SitesClient
 
 
@@ -45,6 +49,7 @@ class Client:
         }
         # the parts of the API
         self.sites = SitesClient(**settings)
+        self.nodes = NodesClient(**settings)
 
     @classmethod
     def from_env(cls) -> Client:

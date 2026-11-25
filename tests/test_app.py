@@ -4,6 +4,7 @@ from textual.widgets import DataTable, Select
 
 from grid_tui.app import Grid5KApp
 from grid_tui.panels.clusters import ClusterPanel
+from grid_tui.panels.nodes import NodesPanel
 from grid_tui.panels.sites import SitesPanel
 from grid_tui.widgets.main_tabs import MainTabs
 from tests.grid5000.fakes import fake_client, g5k_client
@@ -41,13 +42,15 @@ async def test_q_quits():
 
 
 async def test_number_keys_switch_tabs():
-    """1 and 2 switch to the Sites and Clusters tabs."""
+    """1, 2 and 3 switch to the Sites, Clusters and Nodes tabs."""
     app = Grid5KApp(fake_client())
     async with app.run_test() as pilot:
         tabs = app.query_one(MainTabs)
         assert tabs.active == 'sites'
         await pilot.press('2')
         assert tabs.active == 'clusters'
+        await pilot.press('3')
+        assert tabs.active == 'nodes'
         await pilot.press('1')
         assert tabs.active == 'sites'
 
@@ -83,3 +86,37 @@ async def test_r_reloads_sites_and_clusters():
         await settle(app, pilot)
         assert sites.row_count == 2
         assert clusters.row_count == 3
+
+
+# Choosing a cluster opens its nodes
+
+
+async def test_choosing_a_cluster_opens_its_nodes():
+    """Enter on a cluster opens the Nodes tab with that cluster's nodes."""
+    app = Grid5KApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await pilot.press('2')
+        app.query_one(ClusterPanel).query_one(DataTable).focus()
+        await pilot.press('enter')  # the first cluster: nancy / gros
+        await settle(app, pilot)
+        assert app.query_one(MainTabs).active == 'nodes'
+        panel = app.query_one(NodesPanel)
+        assert (panel.site, panel.cluster) == ('nancy', 'gros')
+        nodes = [row[0] for row in rows(panel.query_one(DataTable))]
+        assert nodes == ['gros-1', 'gros-2']
+
+
+async def test_from_a_site_to_its_nodes():
+    """Site → its clusters → a cluster → its nodes, with the keyboard."""
+    app = Grid5KApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        app.query_one(SitesPanel).query_one(DataTable).focus()
+        await pilot.press('enter')  # nancy
+        await settle(app, pilot)
+        app.query_one(ClusterPanel).query_one(DataTable).focus()
+        await pilot.press('enter')  # gros
+        await settle(app, pilot)
+        assert app.query_one(MainTabs).active == 'nodes'
+        assert app.query_one(NodesPanel).query_one(DataTable).row_count == 2

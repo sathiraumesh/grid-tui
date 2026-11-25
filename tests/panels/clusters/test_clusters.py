@@ -11,6 +11,10 @@ from tests.panels.helpers import rows, settle
 class ClustersApp(App):
     """A tiny app that shows only the ClusterPanel, to test it on its own."""
 
+    def on_cluster_panel_chosen(self, message: ClusterPanel.Chosen) -> None:
+        """Keep each cluster the panel says was chosen."""
+        self.chosen.append((message.site, message.cluster))
+
     def __init__(self, client, site: str | None = None) -> None:
         """Make the app.
 
@@ -21,6 +25,7 @@ class ClustersApp(App):
         super().__init__()
         self.client = client
         self.site = site
+        self.chosen: list[tuple[str, str]] = []
 
     def compose(self):
         """The only widget: the Clusters panel."""
@@ -187,3 +192,17 @@ async def test_dropdown_is_one_row_on_the_left():
         assert label.x == panel.x  # 'Site' starts at the left edge
         assert label.right == select.x  # the dropdown just after it
         assert table(app).region.y > select.y  # above the table
+
+
+# Choosing a cluster
+
+
+async def test_enter_on_a_row_sends_chosen_with_its_site_and_cluster():
+    """Enter on a row sends Chosen with that row's site and cluster."""
+    app = ClustersApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        table(app).focus()
+        await pilot.press('down', 'down', 'enter')  # the third row: lyon / nova
+        await pilot.pause()
+        assert app.chosen == [('lyon', 'nova')]

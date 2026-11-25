@@ -1,6 +1,6 @@
 """Tests for Client: the one client that holds every part of the API."""
 
-from grid_tui.grid5000 import Client, SitesClient
+from grid_tui.grid5000 import Client, NodesClient, SitesClient
 from grid_tui.models import Site
 from tests.grid5000.fakes import fake_api
 
@@ -8,6 +8,14 @@ from tests.grid5000.fakes import fake_api
 def test_has_the_sites_part():
     """A Client has a sites part, a SitesClient."""
     assert isinstance(Client().sites, SitesClient)
+
+
+def test_has_the_nodes_part():
+    """A Client has a nodes part, a NodesClient, with the same settings."""
+    client = Client('https://api.example/stable', user='alice')
+    assert isinstance(client.nodes, NodesClient)
+    assert client.nodes.base_url == 'https://api.example/stable'
+    assert client.nodes.user == 'alice'
 
 
 async def test_sites_part_uses_the_clients_settings():

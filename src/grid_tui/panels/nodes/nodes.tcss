@@ -1,0 +1,31 @@
+/* Styles for the NodesPanel */
+
+NodesPanel {
+    height: 1fr;
+}
+
+NodesPanel #nodes-title {
+    height: 1;
+    margin-bottom: 1;
+    color: #a6adc8;
+}
+
+NodesPanel #nodes-title.-chosen {
+    color: #fab387;                /* orange once a cluster is chosen */
+    text-style: bold;
+}
+
+NodesPanel DataTable {
+    height: 1fr;
+    background: #1e1e2e;
+}
+
+NodesPanel DataTable > .datatable--header {
+    color: #fab387;
+    background: #313244;
+    text-style: bold;
+}
+
+NodesPanel DataTable > .datatable--cursor {
+    background: #45475a;
+}

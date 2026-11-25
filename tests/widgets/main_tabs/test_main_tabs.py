@@ -23,11 +23,11 @@ async def test_starts_on_sites():
 
 
 async def test_has_a_tab_per_panel():
-    """There are Sites and Clusters tabs, in that order."""
+    """There are Sites, Clusters and Nodes tabs, in that order."""
     app = TabsApp()
     async with app.run_test():
         panes = app.query_one(TabbedContent).query('TabPane')
-        assert [pane.id for pane in panes] == ['sites', 'clusters']
+        assert [pane.id for pane in panes] == ['sites', 'clusters', 'nodes']
 
 
 async def test_show_switches_tab():
