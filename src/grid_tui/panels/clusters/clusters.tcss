@@ -24,7 +24,7 @@ ClusterPanel DataTable > .datatable--cursor {
 ClusterPanel #toolbar {
     height: 1;
     margin-bottom: 1;
-    align-horizontal: right;       /* push the label and dropdown to the right */
+    align-horizontal: left;       /* push the label and dropdown to the right */
 }
 
 ClusterPanel #site-label {

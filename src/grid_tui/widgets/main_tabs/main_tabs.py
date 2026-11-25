@@ -6,8 +6,8 @@ from textual.widget import Widget
 from textual.widgets import Label, TabbedContent, TabPane
 
 from grid_tui.grid5000 import Client
-from grid_tui.panels.sites import SitesPanel
 from grid_tui.panels.clusters import ClusterPanel
+from grid_tui.panels.sites import SitesPanel
 
 
 class MainTabs(Widget):

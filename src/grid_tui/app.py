@@ -1,12 +1,17 @@
 """The Textual app: the main screen, its keys and its frame."""
 
 from textual.app import App
+from textual.scrollbar import ScrollBar
 from textual.widgets import Footer
 
 from grid_tui.grid5000 import Client
 from grid_tui.panels.clusters import ClusterPanel
 from grid_tui.panels.sites import SitesPanel
 from grid_tui.widgets.main_tabs import MainTabs
+from grid_tui.widgets.thin_scrollbar import ThinScrollBarRender
+
+# every scrollbar in the app: a thin line, the same thickness both ways
+ScrollBar.renderer = ThinScrollBarRender
 
 
 class Grid5KApp(App):
@@ -41,6 +46,11 @@ class Grid5KApp(App):
         """The app's widgets: the tabs, and the help line at the bottom."""
         yield MainTabs(self.client)
         yield Footer()
+
+    def on_sites_panel_chosen(self, message: SitesPanel.Chosen) -> None:
+        """A site was chosen in the Sites tab: show its clusters."""
+        self.query_one(MainTabs).show('clusters')
+        self.query_one(ClusterPanel).show_site(message.site)
 
     def action_reload(self) -> None:
         """Load the sites and clusters again (the r key)."""
