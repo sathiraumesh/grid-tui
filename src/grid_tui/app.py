@@ -4,6 +4,7 @@ from textual.app import App
 from textual.widgets import Footer
 
 from grid_tui.grid5000 import Client
+from grid_tui.panels.clusters import ClusterPanel
 from grid_tui.panels.sites import SitesPanel
 from grid_tui.widgets.main_tabs import MainTabs
 
@@ -42,8 +43,9 @@ class Grid5KApp(App):
         yield Footer()
 
     def action_reload(self) -> None:
-        """Load the sites again (the r key)."""
+        """Load the sites and clusters again (the r key)."""
         self.query_one(SitesPanel).load()
+        self.query_one(ClusterPanel).load()
 
     def action_show_tab(self, tab: str) -> None:
         """Switch to the tab with this id (the 1, 2 and 3 keys)."""

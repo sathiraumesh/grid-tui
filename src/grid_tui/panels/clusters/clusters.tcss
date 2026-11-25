@@ -1,0 +1,56 @@
+/* Styles for the ClusterPanel */
+
+ClusterPanel {
+    height: 1fr;
+}
+
+ClusterPanel DataTable {
+    height: 1fr;
+    background: #1e1e2e;
+}
+
+ClusterPanel DataTable > .datatable--header {
+    color: #fab387;
+    background: #313244;
+    text-style: bold;
+}
+
+ClusterPanel DataTable > .datatable--cursor {
+    background: #45475a;
+}
+
+/* The site dropdown: one small row, on the right */
+
+ClusterPanel #toolbar {
+    height: 1;
+    margin-bottom: 1;
+    align-horizontal: right;       /* push the label and dropdown to the right */
+}
+
+ClusterPanel #site-label {
+    width: auto;
+    padding: 0 1;
+    color: #a6adc8;
+}
+
+ClusterPanel #site-select {
+    width: 22;
+}
+
+ClusterPanel #site-select > SelectCurrent {
+    background: #313244;
+    padding: 0 1;
+}
+
+ClusterPanel #site-select:focus > SelectCurrent {
+    background: #45475a;           /* a bit lighter when it has focus */
+}
+
+ClusterPanel #site-select > SelectCurrent .arrow {
+    color: #fab387;                /* orange arrow */
+}
+
+ClusterPanel #site-select > SelectOverlay {
+    border: round #fab387;
+    background: #313244;
+}

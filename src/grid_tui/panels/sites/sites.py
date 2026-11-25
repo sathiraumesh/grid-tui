@@ -3,7 +3,8 @@
 from pathlib import Path
 
 import httpx
-from textual import work
+from textual import on, work
+from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable
 
@@ -15,6 +16,18 @@ class SitesPanel(Widget):
     """A table of every Grid'5000 site, loaded from the API."""
 
     DEFAULT_CSS = (Path(__file__).parent / 'sites.tcss').read_text()
+
+    class Chosen(Message):
+        """Sent when a site is chosen in the table (Enter, or a click)."""
+
+        def __init__(self, site: str) -> None:
+            """Make the message.
+
+            Args:
+                site: The chosen site's uid, e.g. 'nancy'.
+            """
+            super().__init__()
+            self.site = site
 
     def __init__(self, client: Client, **kwargs) -> None:
         """Make the panel.
@@ -54,3 +67,8 @@ class SitesPanel(Widget):
         table.clear()
         for site in sites:
             table.add_row(site.uid, site.name, site.description, key=site.uid)
+
+    @on(DataTable.RowSelected)
+    def _site_chosen(self, event: DataTable.RowSelected) -> None:
+        """A row was chosen: tell the app which site it is."""
+        self.post_message(self.Chosen(event.row_key.value))

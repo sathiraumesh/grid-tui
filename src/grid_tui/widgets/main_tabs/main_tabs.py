@@ -7,6 +7,7 @@ from textual.widgets import Label, TabbedContent, TabPane
 
 from grid_tui.grid5000 import Client
 from grid_tui.panels.sites import SitesPanel
+from grid_tui.panels.clusters import ClusterPanel
 
 
 class MainTabs(Widget):
@@ -31,7 +32,7 @@ class MainTabs(Widget):
             with TabPane('Sites', id='sites'):
                 yield SitesPanel(self.client)
             with TabPane('Clusters', id='clusters'):
-                yield Label('Clusters will go here')
+                yield ClusterPanel(self.client)
             with TabPane('Nodes', id='nodes'):
                 yield Label('Nodes will go here')
 

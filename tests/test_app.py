@@ -1,6 +1,11 @@
+from textual.widgets import DataTable, Select
+
 from grid_tui.app import Grid5KApp
+from grid_tui.panels.clusters import ClusterPanel
+from grid_tui.panels.sites import SitesPanel
 from grid_tui.widgets.main_tabs import MainTabs
-from tests.grid5000.fakes import fake_client
+from tests.grid5000.fakes import fake_client, g5k_client
+from tests.panels.helpers import rows, settle
 
 
 async def test_frame_shows_title_and_subtitle():
@@ -41,3 +46,34 @@ async def test_number_keys_switch_tabs():
         assert tabs.active == 'nodes'
         await pilot.press('1')
         assert tabs.active == 'sites'
+
+
+# Choosing a site opens its clusters
+
+
+async def test_choosing_a_site_opens_its_clusters():
+    app = Grid5KApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        app.query_one(SitesPanel).query_one(DataTable).focus()
+        await pilot.press('down', 'enter')  # the second site: lyon
+        await settle(app, pilot)
+        assert app.query_one(MainTabs).active == 'clusters'
+        panel = app.query_one(ClusterPanel)
+        assert panel.site == 'lyon'
+        assert [row[0] for row in rows(panel.query_one(DataTable))] == ['lyon']
+        assert panel.query_one('#site-select', Select).selection == 'lyon'
+
+
+async def test_r_reloads_sites_and_clusters():
+    app = Grid5KApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        sites = app.query_one(SitesPanel).query_one(DataTable)
+        clusters = app.query_one(ClusterPanel).query_one(DataTable)
+        sites.clear()
+        clusters.clear()
+        await pilot.press('r')
+        await settle(app, pilot)
+        assert sites.row_count == 2
+        assert clusters.row_count == 3
