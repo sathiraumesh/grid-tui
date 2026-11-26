@@ -51,11 +51,15 @@ class SitesPanel(Widget):
         self.load()
 
     @work(exclusive=True)  # runs in the background; a new load cancels the old one
-    async def load(self) -> None:
-        """Fetch the sites from the API and show them."""
+    async def load(self, refresh: bool = False) -> None:
+        """Fetch the sites and show them: from the cache, once they're saved.
+
+        Args:
+            refresh: Ask the API again instead of using the cache (the r key).
+        """
         self.loading = True  # shows a spinner over the panel
         try:
-            sites = await self.client.sites.list()
+            sites = await self.client.sites.list(refresh=refresh)
         except (ApiError, httpx.HTTPError) as error:
             self.notify(str(error), title="Couldn't load sites", severity='error')
             return

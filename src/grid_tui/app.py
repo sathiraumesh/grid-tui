@@ -66,11 +66,16 @@ class Grid5KApp(App):
         self.query_one(NodesPanel).show_cluster(message.site, message.cluster)
 
     def action_reload(self) -> None:
-        """Load every tab again (the r key)."""
-        self.query_one(SitesPanel).load()
-        self.query_one(ClusterPanel).load()
-        self.query_one(NodesPanel).load()
-        self.query_one(SearchPanel).load()
+        """Load the tab that is showing again, from the API (the r key)."""
+        tab = self.query_one(MainTabs).active
+        if tab == 'sites':
+            self.query_one(SitesPanel).load(refresh=True)  # skip the cache
+        elif tab == 'clusters':
+            self.query_one(ClusterPanel).load()
+        elif tab == 'nodes':
+            self.query_one(NodesPanel).load()
+        elif tab == 'search':
+            self.query_one(SearchPanel).load()
 
     def action_show_tab(self, tab: str) -> None:
         """Switch to the tab with this id (the 1, 2, 3 and 4 keys)."""

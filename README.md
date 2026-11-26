@@ -50,7 +50,7 @@ pytest
   clusters can take it; reserve on one (`Reserve`, then `Yes, send`).
 - **6 My reservations**: your jobs on every site; `x` cancels, `enter` shows one's cluster.
 - **7 Search**: the clusters of every site that meet a form of requirements.
-- `1`–`7` go to a tab (form fields take digits); `r` (or `ctrl+r` in a form) reloads; `q` quits.
+- `1`–`7` go to a tab (form fields take digits); `r` reloads the tab that is showing; `q` quits.
 
 ## Layout
 

@@ -23,6 +23,8 @@ from typing import Any, TypeVar
 
 import httpx
 
+from grid_tui.grid5000.cache import Cache
+
 DEFAULT_BASE_URL = 'https://api.grid5000.fr/stable'
 SECRET_DIR_NAME = '.grid-secret'
 SETTING_NAMES = ('G5K_API', 'G5K_USER', 'G5K_PASSWORD')
@@ -112,6 +114,7 @@ class BaseClient:
         *,
         transport: httpx.AsyncBaseTransport | None = None,  # tests pass a fake one
         timeout: float = 30.0,
+        cache: Cache | None = None,
     ) -> None:
         """Make the client.
 
@@ -121,20 +124,45 @@ class BaseClient:
             password: Your Grid'5000 password.
             transport: What sends the requests; tests give a fake one.
             timeout: How many seconds to wait for an answer.
+            cache: Where to save answers asked for with cached=True; None
+                saves nothing (tests leave it out).
         """
         self.base_url = base_url.rstrip('/')
         self.user = user
         self.password = password
         self._transport = transport
         self._timeout = timeout
+        self.cache = cache
 
     @classmethod
     def from_env(cls: type[ClientT]) -> ClientT:
-        """A client set up from G5K_API, G5K_USER and G5K_PASSWORD."""
-        return cls(**settings_from_env())
+        """A client set up from G5K_API, G5K_USER and G5K_PASSWORD, with a cache."""
+        return cls(**settings_from_env(), cache=Cache())
 
-    async def _get(self, path: str) -> Any:
-        """GET path and return the JSON answer."""
+    async def _get(
+        self, path: str, *, cached: bool = False, refresh: bool = False
+    ) -> Any:
+        """GET path and return the JSON answer.
+
+        Args:
+            path: The API path, e.g. '/sites'.
+            cached: Use the saved answer if there is one, and save new ones.
+                Only for answers that hardly change, like the sites.
+            refresh: Ask the API even if an answer is saved, and save the new
+                one (the r key).
+        """
+        key = self.base_url + path  # another API root has its own answers
+        if cached and self.cache is not None and not refresh:
+            saved = self.cache.get(key)
+            if saved is not None:
+                return saved
+        answer = await self._fetch(path)
+        if cached and self.cache is not None:
+            self.cache.put(key, answer)
+        return answer
+
+    async def _fetch(self, path: str) -> Any:
+        """GET path from the API itself and return the JSON answer."""
         auth = httpx.BasicAuth(self.user, self.password) if self.user else None
         async with httpx.AsyncClient(
             base_url=self.base_url,

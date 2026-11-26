@@ -15,6 +15,7 @@ from __future__ import annotations
 import httpx
 
 from grid_tui.grid5000.base import DEFAULT_BASE_URL, settings_from_env
+from grid_tui.grid5000.cache import Cache
 from grid_tui.grid5000.nodes import NodesClient
 from grid_tui.grid5000.sites import SitesClient
 
@@ -30,6 +31,7 @@ class Client:
         *,
         transport: httpx.AsyncBaseTransport | None = None,  # tests pass a fake one
         timeout: float = 30.0,
+        cache: Cache | None = None,
     ) -> None:
         """Make the client and every part of it, all with these settings.
 
@@ -39,13 +41,17 @@ class Client:
             password: Your Grid'5000 password.
             transport: What sends the requests; tests give a fake one.
             timeout: How many seconds to wait for an answer.
+            cache: Where the parts save the answers that hardly change; one
+                for them all. None saves nothing.
         """
+        self.cache = cache
         settings = {
             'base_url': base_url,
             'user': user,
             'password': password,
             'transport': transport,
             'timeout': timeout,
+            'cache': cache,
         }
         # the parts of the API
         self.sites = SitesClient(**settings)
@@ -53,5 +59,5 @@ class Client:
 
     @classmethod
     def from_env(cls) -> Client:
-        """A client set up from G5K_API, G5K_USER and G5K_PASSWORD."""
-        return cls(**settings_from_env())
+        """A client set up from G5K_API, G5K_USER and G5K_PASSWORD, with a cache."""
+        return cls(**settings_from_env(), cache=Cache())

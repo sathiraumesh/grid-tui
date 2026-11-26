@@ -13,9 +13,13 @@ from grid_tui.models.cluster import Cluster
 class SitesClient(BaseClient):
     """The calls about sites."""
 
-    async def list(self) -> list[Site]:
-        """Every Grid'5000 site."""
-        data = await self._get('/sites')
+    async def list(self, *, refresh: bool = False) -> list[Site]:
+        """Every Grid'5000 site. Saved in the cache after the first time.
+
+        Args:
+            refresh: Ask the API again instead of using the cache.
+        """
+        data = await self._get('/sites', cached=True, refresh=refresh)
         return [Site.model_validate(item) for item in data.get('items', [])]
 
     async def list_clusters(self, site: str) -> list[Cluster]:

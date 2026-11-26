@@ -3,12 +3,20 @@
 from textual.widgets import DataTable, Select
 
 from grid_tui.app import Grid5KApp
+from grid_tui.grid5000 import Cache, Client
 from grid_tui.widgets.main_tabs import MainTabs
 from grid_tui.widgets.panels.clusters import ClusterPanel
 from grid_tui.widgets.panels.nodes import NodesPanel
 from grid_tui.widgets.panels.search import SearchPanel
 from grid_tui.widgets.panels.sites import SitesPanel
-from tests.grid5000.fakes import fake_client, g5k_client
+from tests.grid5000.fakes import (
+    CLUSTERS,
+    NODES,
+    SITES,
+    fake_client,
+    fake_grid5000,
+    g5k_client,
+)
 from tests.widgets.panels.helpers import rows, settle
 
 
@@ -76,8 +84,8 @@ async def test_choosing_a_site_opens_its_clusters() -> None:
         assert panel.query_one('#site-select', Select).selection == 'lyon'
 
 
-async def test_r_reloads_sites_and_clusters() -> None:
-    """r loads both tables again."""
+async def test_r_reloads_only_the_tab_that_is_showing() -> None:
+    """r loads the showing tab again, and leaves the other tabs as they are."""
     app = Grid5KApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
@@ -85,10 +93,41 @@ async def test_r_reloads_sites_and_clusters() -> None:
         clusters = app.query_one(ClusterPanel).query_one(DataTable)
         sites.clear()
         clusters.clear()
-        await pilot.press('r')
+        await pilot.press('r')  # on the Sites tab
         await settle(app, pilot)
         assert sites.row_count == 2
+        assert clusters.row_count == 0  # not reloaded
+
+        await pilot.press('2')  # the Clusters tab
+        sites.clear()
+        await pilot.press('r')
+        await settle(app, pilot)
         assert clusters.row_count == 3
+        assert sites.row_count == 0  # not reloaded
+
+
+async def test_r_asks_the_api_again_not_the_cache() -> None:
+    """With a cache, sites load from it after the first time, but r asks the API."""
+    seen = []
+    client = Client(
+        transport=fake_grid5000(SITES, CLUSTERS, nodes=NODES, seen=seen),
+        cache=Cache(':memory:'),
+    )
+    app = Grid5KApp(client)
+
+    def asked() -> int:
+        """How many times /sites was asked of the API."""
+        return sum(request.url.path == '/stable/sites' for request in seen)
+
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        before = asked()
+        app.query_one(SitesPanel).load()
+        await settle(app, pilot)
+        assert asked() == before  # from the cache
+        await pilot.press('r')
+        await settle(app, pilot)
+        assert asked() == before + 1  # from the API
 
 
 # Choosing a cluster opens its nodes
