@@ -2,9 +2,11 @@
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 import httpx
 from textual import on, work
+from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
 
@@ -71,7 +73,7 @@ class NodesPanel(Widget):
         client: Client,
         site: str | None = None,
         cluster: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Make the panel.
 
@@ -89,7 +91,7 @@ class NodesPanel(Widget):
         self.nodes: dict[str, Node] = {}  # the nodes in the table, by uid
         self.cluster_info: Cluster | None = None  # the cluster, for its metrics
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The panel's widgets: which cluster it is, then the table of nodes."""
         yield Label(HINT, id='nodes-title')
         yield DataTable(cursor_type='row', zebra_stripes=True)

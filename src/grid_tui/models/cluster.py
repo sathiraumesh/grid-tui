@@ -1,5 +1,7 @@
 """A cluster of a Grid'5000 site."""
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from grid_tui.models.metric import MetricInfo
@@ -32,7 +34,7 @@ class Cluster(BaseModel):
 
     @field_validator('model', 'created_at', 'type', 'version', mode='before')
     @classmethod
-    def _as_text(cls, value):
+    def _as_text(cls, value: Any) -> Any:
         """Null is ''; a number (version can be one) is read as its text."""
         if value is None:
             return ''
@@ -42,13 +44,13 @@ class Cluster(BaseModel):
 
     @field_validator('queues', 'links', mode='before')
     @classmethod
-    def _null_is_empty_list(cls, value):
+    def _null_is_empty_list(cls, value: Any) -> Any:
         """A missing or null list is an empty one."""
         return () if value is None else value
 
     @field_validator('metrics', mode='before')
     @classmethod
-    def _read_metrics(cls, value):
+    def _read_metrics(cls, value: Any) -> Any:
         """Read each metric; one that can't be read is skipped, not the cluster."""
         if not isinstance(value, list):
             return ()
@@ -62,7 +64,7 @@ class Cluster(BaseModel):
 
     @field_validator('exotic', 'kavlan', mode='before')
     @classmethod
-    def _null_is_false(cls, value):
+    def _null_is_false(cls, value: Any) -> Any:
         """A missing or null yes/no is no."""
         return False if value is None else value
 

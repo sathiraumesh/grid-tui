@@ -5,6 +5,7 @@ didn't give are left out, and so is a section with nothing in it.
 """
 
 from rich.table import Table
+from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -237,7 +238,7 @@ class NodeDetails(ModalScreen):
         self.node = node
         self.metrics = metrics
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """A framed box: a scrolling list of sections, each a title and its rows."""
         with Vertical(id='details'):
             with VerticalScroll(id='details-body'):

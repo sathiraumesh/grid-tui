@@ -31,8 +31,10 @@ target-version = "py310"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-# E/W: pycodestyle (PEP 8), F: pyflakes, I: import order, N: PEP 8 naming
-select = ["E", "W", "F", "I", "N"]
+# E/W: pycodestyle (PEP 8), F: pyflakes, I: import order, N: PEP 8 naming,
+# ANN: type hints on every function's arguments and return
+select = ["E", "W", "F", "I", "N", "ANN"]
+ignore = ["ANN401"]  # Any is allowed where a value really can be anything (raw JSON)
 
 [tool.ruff.format]
 quote-style = "single"

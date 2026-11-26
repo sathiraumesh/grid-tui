@@ -4,6 +4,8 @@ As GET /sites/{site}/clusters/{cluster}/nodes lists it. Sizes are in bytes,
 speeds in hertz and rates in bits per second, as the API gives them.
 """
 
+from typing import Any
+
 from pydantic import BaseModel, field_validator
 
 from grid_tui.models.base import ApiModel
@@ -15,7 +17,7 @@ GBPS = 10**9  # bits per second in a gigabit per second
 GFLOPS = 10**9  # floating-point operations per second in a gigaflops
 
 
-def _yes_or_text(value):
+def _yes_or_text(value: Any) -> Any:
     """A yes/no-or-text answer as text: True → 'yes', False or null → ''.
 
     Used where the API gives either a flag or a word, e.g. a wattmeter that is
@@ -188,7 +190,7 @@ class JobTypes(ApiModel):
 
     @field_validator('virtual', mode='before')
     @classmethod
-    def _virtual_as_text(cls, value):
+    def _virtual_as_text(cls, value: Any) -> Any:
         """virtual is false or a word like 'ivt': read it as text."""
         return _yes_or_text(value)
 
@@ -201,7 +203,7 @@ class Monitoring(ApiModel):
 
     @field_validator('wattmeter', mode='before')
     @classmethod
-    def _wattmeter_as_text(cls, value):
+    def _wattmeter_as_text(cls, value: Any) -> Any:
         """wattmeter is true, false or a word: read it as text."""
         return _yes_or_text(value)
 
@@ -254,7 +256,7 @@ class Node(ApiModel):
         mode='before',
     )
     @classmethod
-    def _a_part_is_an_object(cls, value):
+    def _a_part_is_an_object(cls, value: Any) -> Any:
         """A part that isn't an object (e.g. 'n/a') is read as empty.
 
         A part given ready-made, e.g. bios=Bios(...), is kept as it is.
@@ -265,7 +267,7 @@ class Node(ApiModel):
         'storage_devices', 'network_adapters', 'pdu', 'links', mode='before'
     )
     @classmethod
-    def _only_dicts(cls, value):
+    def _only_dicts(cls, value: Any) -> Any:
         """Keep only the entries that are objects; a broken entry is skipped."""
         if not isinstance(value, list):
             return ()
@@ -273,7 +275,7 @@ class Node(ApiModel):
 
     @field_validator('gpu_devices', mode='before')
     @classmethod
-    def _gpus_in_order(cls, value):
+    def _gpus_in_order(cls, value: Any) -> Any:
         """The API gives GPUs as {'0': {...}, '1': {...}}: keep them in key order.
 
         A plain list of GPUs is read as it is.
@@ -286,7 +288,7 @@ class Node(ApiModel):
 
     @field_validator('memory_devices', mode='before')
     @classmethod
-    def _memory_devices_by_name(cls, value):
+    def _memory_devices_by_name(cls, value: Any) -> Any:
         """The API gives RAM modules as {'dimm_a0': {'size': ...}, ...}.
 
         Each becomes a MemoryDevice named after its key, in key order. A plain

@@ -23,7 +23,7 @@ BMC = {
 }
 
 
-def test_reads_api_json():
+def test_reads_api_json() -> None:
     """Every part of a metric is read."""
     metric = MetricInfo.model_validate(WATTMETRE)
     assert metric == MetricInfo(
@@ -38,7 +38,7 @@ def test_reads_api_json():
     )
 
 
-def test_only_name_is_needed():
+def test_only_name_is_needed() -> None:
     """A metric needs only a name; the rest have defaults."""
     metric = MetricInfo(name='x')
     assert metric.description == ''
@@ -49,13 +49,13 @@ def test_only_name_is_needed():
     assert metric.only_for == ()
 
 
-def test_name_is_required():
+def test_name_is_required() -> None:
     """A metric without a name is an error."""
     with pytest.raises(ValidationError):
         MetricInfo.model_validate({'description': 'no name'})
 
 
-def test_nulls_and_odd_parts_become_defaults():
+def test_nulls_and_odd_parts_become_defaults() -> None:
     """Nulls, and parts of the wrong kind, give the defaults."""
     metric = MetricInfo.model_validate(
         {
@@ -69,26 +69,26 @@ def test_nulls_and_odd_parts_become_defaults():
     assert metric == MetricInfo(name='x')
 
 
-def test_label_numbers_are_read_as_text():
+def test_label_numbers_are_read_as_text() -> None:
     """A label given as a number is read as text."""
     assert MetricInfo.model_validate({'name': 'x', 'labels': {'port': 12}}).labels == {
         'port': '12'
     }
 
 
-def test_period_in_seconds():
+def test_period_in_seconds() -> None:
     """period_seconds gives the period in seconds."""
     assert MetricInfo(name='x', period=20).period_seconds == 0.02
 
 
-def test_applies_to_only_the_nodes_listed():
+def test_applies_to_only_the_nodes_listed() -> None:
     """A metric with only_for is recorded only for those nodes."""
     metric = MetricInfo.model_validate(WATTMETRE)
     assert metric.applies_to('gros-1') is True
     assert metric.applies_to('gros-9') is False
 
 
-def test_applies_to_every_node_without_only_for():
+def test_applies_to_every_node_without_only_for() -> None:
     """A metric with no only_for is recorded for every node."""
     assert MetricInfo.model_validate(BMC).applies_to('gros-9') is True
 
@@ -96,7 +96,7 @@ def test_applies_to_every_node_without_only_for():
 # A cluster's metrics
 
 
-def test_cluster_reads_its_metrics():
+def test_cluster_reads_its_metrics() -> None:
     """A cluster's metrics are read as MetricInfo, in order."""
     cluster = Cluster.model_validate({'uid': 'gros', 'metrics': [WATTMETRE, BMC]})
     assert cluster.metrics == (
@@ -106,14 +106,14 @@ def test_cluster_reads_its_metrics():
     assert cluster.metric_names == ('wattmetre_power_watt', 'bmc_node_power_watt')
 
 
-def test_cluster_skips_a_metric_it_cannot_read():
+def test_cluster_skips_a_metric_it_cannot_read() -> None:
     """A broken metric is left out; the cluster and its other metrics are kept."""
     broken = {'name': 'x', 'period': 'often'}  # not a number
     cluster = Cluster.model_validate({'uid': 'gros', 'metrics': [broken, BMC, 'oops']})
     assert cluster.metric_names == ('bmc_node_power_watt',)
 
 
-def test_cluster_metrics_for_a_node():
+def test_cluster_metrics_for_a_node() -> None:
     """metrics_for gives the metrics recorded for one node."""
     cluster = Cluster.model_validate({'uid': 'gros', 'metrics': [WATTMETRE, BMC]})
     for_listed = [m.name for m in cluster.metrics_for('gros-1')]
@@ -122,7 +122,7 @@ def test_cluster_metrics_for_a_node():
     assert for_other == ['bmc_node_power_watt']
 
 
-def test_cluster_with_no_metrics():
+def test_cluster_with_no_metrics() -> None:
     """A cluster with no or null metrics has none."""
     assert Cluster.model_validate({'uid': 'gros', 'metrics': None}).metrics == ()
     assert Cluster(uid='gros').metric_names == ()

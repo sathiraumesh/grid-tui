@@ -89,7 +89,7 @@ GROS_12 = {
 }
 
 
-def test_only_uid_is_needed():
+def test_only_uid_is_needed() -> None:
     """A Node needs only a uid; the hardware defaults to empty."""
     node = Node(uid='gros-12')
     assert node.cluster == ''
@@ -111,7 +111,7 @@ def test_only_uid_is_needed():
     assert node.links == ()
 
 
-def test_reads_api_json():
+def test_reads_api_json() -> None:
     """Every part of a node is read from the API's JSON."""
     node = Node.model_validate(GROS_12)
     assert node.uid == 'gros-12'
@@ -134,13 +134,13 @@ def test_reads_api_json():
     assert node.gpu_devices == ()
 
 
-def test_unknown_fields_are_ignored():
+def test_unknown_fields_are_ignored() -> None:
     """Fields Node doesn't know are dropped."""
     node = Node.model_validate({'uid': 'gros-12', 'something_new': {'a': 1}})
     assert node == Node(uid='gros-12')
 
 
-def test_null_parts_become_defaults():
+def test_null_parts_become_defaults() -> None:
     """A null in any part, or inside one, gives the default."""
     nulls = {key: None for key in GROS_12 if key != 'uid'}
     assert Node.model_validate({'uid': 'gros-12', **nulls}) == Node(uid='gros-12')
@@ -148,13 +148,13 @@ def test_null_parts_become_defaults():
     assert node.processor == Processor()
 
 
-def test_numbers_in_text_are_read_as_numbers():
+def test_numbers_in_text_are_read_as_numbers() -> None:
     """A number sent as text, e.g. '18', is read as a number."""
     node = Node.model_validate({'uid': 'gros-12', 'architecture': {'nb_cores': '18'}})
     assert node.architecture.nb_cores == 18
 
 
-def test_gpus_given_by_number_are_kept_in_order():
+def test_gpus_given_by_number_are_kept_in_order() -> None:
     """GPUs come as {'0': ..., '1': ...}; they are kept in that order."""
     node = Node.model_validate(
         {
@@ -179,13 +179,13 @@ def test_gpus_given_by_number_are_kept_in_order():
     )
 
 
-def test_gpus_given_as_a_list_are_read_too():
+def test_gpus_given_as_a_list_are_read_too() -> None:
     """A plain list of GPUs is read as it is."""
     node = Node.model_validate({'uid': 'x', 'gpu_devices': [{'model': 'A100'}]})
     assert node.gpu_devices == (Gpu(model='A100'),)
 
 
-def test_broken_entries_are_skipped():
+def test_broken_entries_are_skipped() -> None:
     """Disk, card and GPU entries that aren't objects are left out."""
     node = Node.model_validate(
         {
@@ -200,13 +200,13 @@ def test_broken_entries_are_skipped():
     assert node.gpu_devices == (Gpu(model='A100'),)
 
 
-def test_connected_adapters_are_the_mounted_ones():
+def test_connected_adapters_are_the_mounted_ones() -> None:
     """connected_adapters leaves out the cards that aren't connected."""
     node = Node.model_validate(GROS_12)
     assert [a.device for a in node.connected_adapters] == ['eth0']
 
 
-def test_sizes_and_speeds_in_readable_units():
+def test_sizes_and_speeds_in_readable_units() -> None:
     """The hardware gives GHz, GiB and Gbit/s as well as the raw numbers."""
     node = Node.model_validate(GROS_12)
     assert node.processor.ghz == 2.2
@@ -216,24 +216,24 @@ def test_sizes_and_speeds_in_readable_units():
     assert Gpu(memory=32 * 1024**3).gib == 32.0
 
 
-def test_processor_name_falls_back_to_the_model():
+def test_processor_name_falls_back_to_the_model() -> None:
     """With no full description, the processor's name is its model."""
     assert Processor(model='AMD EPYC').name == 'AMD EPYC'
 
 
-def test_uid_is_required():
+def test_uid_is_required() -> None:
     """A node without a uid is an error."""
     with pytest.raises(ValidationError):
         Node.model_validate({'cluster': 'gros'})
 
 
-def test_wrong_type_is_an_error():
+def test_wrong_type_is_an_error() -> None:
     """A core count that isn't a number is an error."""
     with pytest.raises(ValidationError):
         Node.model_validate({'uid': 'x', 'architecture': {'nb_cores': 'many'}})
 
 
-def test_cannot_be_changed():
+def test_cannot_be_changed() -> None:
     """A Node and its parts are frozen."""
     node = Node.model_validate(GROS_12)
     with pytest.raises(ValidationError):
@@ -242,7 +242,7 @@ def test_cannot_be_changed():
         node.processor.clock_speed = 0
 
 
-def test_network_adapter_defaults_to_not_connected():
+def test_network_adapter_defaults_to_not_connected() -> None:
     """A card with no mounted flag counts as not connected."""
     assert NetworkAdapter(device='eth0').mounted is False
 
@@ -250,7 +250,7 @@ def test_network_adapter_defaults_to_not_connected():
 # The other parts of a node
 
 
-def test_reads_the_bios_and_chassis():
+def test_reads_the_bios_and_chassis() -> None:
     """The BIOS and the machine's make are read."""
     node = Node.model_validate(GROS_12)
     assert node.bios == Bios(
@@ -261,7 +261,7 @@ def test_reads_the_bios_and_chassis():
     )
 
 
-def test_reads_the_operating_system_settings():
+def test_reads_the_operating_system_settings() -> None:
     """The CPU settings of the default system are read."""
     assert Node.model_validate(GROS_12).operating_system == OperatingSystem(
         ht_enabled=True,
@@ -273,7 +273,7 @@ def test_reads_the_operating_system_settings():
     )
 
 
-def test_reads_the_performance():
+def test_reads_the_performance() -> None:
     """The benchmark speeds are read, and given in GFLOPS too."""
     performance = Node.model_validate(GROS_12).performance
     assert performance == Performance(
@@ -283,7 +283,7 @@ def test_reads_the_performance():
     assert performance.node_gflops == 790.0
 
 
-def test_reads_the_job_types():
+def test_reads_the_job_types() -> None:
     """What jobs the node takes is read."""
     assert Node.model_validate(GROS_12).supported_job_types == JobTypes(
         deploy=True,
@@ -294,37 +294,37 @@ def test_reads_the_job_types():
     )
 
 
-def test_no_virtualisation_is_empty_text():
+def test_no_virtualisation_is_empty_text() -> None:
     """virtual: false is read as ''."""
     node = Node.model_validate({'uid': 'x', 'supported_job_types': {'virtual': False}})
     assert node.supported_job_types.virtual == ''
 
 
-def test_reads_the_monitoring():
+def test_reads_the_monitoring() -> None:
     """A node with a wattmeter says so."""
     monitoring = Node.model_validate(GROS_12).monitoring
     assert monitoring == Monitoring(wattmeter='yes', metric='power')
     assert monitoring.has_wattmeter is True
 
 
-def test_a_shared_wattmeter_counts_as_a_wattmeter():
+def test_a_shared_wattmeter_counts_as_a_wattmeter() -> None:
     """wattmeter: 'shared' is kept as it is, and counts as having one."""
     monitoring = Monitoring.model_validate({'wattmeter': 'shared'})
     assert monitoring.wattmeter == 'shared'
     assert monitoring.has_wattmeter is True
 
 
-def test_no_wattmeter():
+def test_no_wattmeter() -> None:
     """wattmeter: false means no wattmeter."""
     assert Monitoring.model_validate({'wattmeter': False}).has_wattmeter is False
 
 
-def test_reads_the_pdu_and_a_number_port_as_text():
+def test_reads_the_pdu_and_a_number_port_as_text() -> None:
     """The power strip is read; its port number is read as text."""
     assert Node.model_validate(GROS_12).pdu == (PduPort(uid='gros-pdu1', port='12'),)
 
 
-def test_reads_the_links():
+def test_reads_the_links() -> None:
     """The node's links to related API pages are read."""
     [link] = Node.model_validate(GROS_12).links
     assert link == Link(
@@ -332,7 +332,7 @@ def test_reads_the_links():
     )
 
 
-def test_memory_devices_are_named_after_their_keys_in_order():
+def test_memory_devices_are_named_after_their_keys_in_order() -> None:
     """RAM modules come as {'dimm_a0': {...}}; each keeps its key as its name."""
     modules = Node.model_validate(GROS_12).memory_devices
     assert modules == (
@@ -342,13 +342,13 @@ def test_memory_devices_are_named_after_their_keys_in_order():
     assert modules[0].gib == 64.0
 
 
-def test_memory_devices_given_as_a_list_are_read_too():
+def test_memory_devices_given_as_a_list_are_read_too() -> None:
     """A plain list of RAM modules is read as it is."""
     node = Node.model_validate({'uid': 'x', 'memory_devices': [{'size': 8}]})
     assert node.memory_devices == (MemoryDevice(size=8),)
 
 
-def test_reads_the_processor_details():
+def test_reads_the_processor_details() -> None:
     """The processor's caches, version and abilities are read."""
     processor = Processor.model_validate(
         {
@@ -370,7 +370,7 @@ def test_reads_the_processor_details():
     assert (processor.cache_l2, processor.cache_l3) == (1048576, 25952256)
 
 
-def test_reads_the_network_adapter_details():
+def test_reads_the_network_adapter_details() -> None:
     """A card's MAC, KaVLAN support and switch port are read."""
     adapter = NetworkAdapter.model_validate(
         {
@@ -385,7 +385,7 @@ def test_reads_the_network_adapter_details():
     )
 
 
-def test_a_part_that_is_not_an_object_is_empty():
+def test_a_part_that_is_not_an_object_is_empty() -> None:
     """A part sent as text or a number (e.g. 'n/a') is read as empty."""
     node = Node.model_validate(
         {'uid': 'x', 'bios': 'n/a', 'performance': 0, 'monitoring': []}
@@ -395,13 +395,13 @@ def test_a_part_that_is_not_an_object_is_empty():
     assert node.monitoring == Monitoring()
 
 
-def test_cluster_name_falls_back_to_the_nodeset():
+def test_cluster_name_falls_back_to_the_nodeset() -> None:
     """With no cluster, cluster_name is the nodeset."""
     assert Node(uid='x', nodeset='gros').cluster_name == 'gros'
     assert Node(uid='x', cluster='gros', nodeset='other').cluster_name == 'gros'
 
 
-def test_ram_from_main_memory_or_the_modules():
+def test_ram_from_main_memory_or_the_modules() -> None:
     """ram_gib is main_memory, or the RAM modules added up if that is missing."""
     assert Node.model_validate(GROS_12).ram_gib == 96.0
     node = Node.model_validate(
@@ -413,7 +413,7 @@ def test_ram_from_main_memory_or_the_modules():
     assert node.ram_gib == 3.0
 
 
-def test_parts_given_ready_made_are_kept():
+def test_parts_given_ready_made_are_kept() -> None:
     """A part passed as a model, e.g. bios=Bios(...), is kept, not emptied."""
     node = Node(
         uid='x', bios=Bios(vendor='Dell Inc.'), performance=Performance(node_flops=1)

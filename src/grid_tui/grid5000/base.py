@@ -19,13 +19,15 @@ import base64
 import binascii
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 
 DEFAULT_BASE_URL = 'https://api.grid5000.fr/stable'
 SECRET_DIR_NAME = '.grid-secret'
 SETTING_NAMES = ('G5K_API', 'G5K_USER', 'G5K_PASSWORD')
+
+ClientT = TypeVar('ClientT', bound='BaseClient')  # from_env makes the same class
 
 
 def find_secret_dir() -> Path:
@@ -127,7 +129,7 @@ class BaseClient:
         self._timeout = timeout
 
     @classmethod
-    def from_env(cls):
+    def from_env(cls: type[ClientT]) -> ClientT:
         """A client set up from G5K_API, G5K_USER and G5K_PASSWORD."""
         return cls(**settings_from_env())
 

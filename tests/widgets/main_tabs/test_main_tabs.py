@@ -1,6 +1,6 @@
 """Tests for MainTabs: the tab bar and switching tabs."""
 
-from textual.app import App
+from textual.app import App, ComposeResult
 from textual.widgets import TabbedContent
 
 from grid_tui.widgets.main_tabs import MainTabs
@@ -10,19 +10,19 @@ from tests.grid5000.fakes import fake_client
 class TabsApp(App):
     """A tiny app that shows only MainTabs, to test it on its own."""
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The only widget: the tabs, with a fake client."""
         yield MainTabs(fake_client())
 
 
-async def test_starts_on_sites():
+async def test_starts_on_sites() -> None:
     """The Sites tab shows first."""
     app = TabsApp()
     async with app.run_test():
         assert app.query_one(MainTabs).active == 'sites'
 
 
-async def test_has_a_tab_per_panel():
+async def test_has_a_tab_per_panel() -> None:
     """There are Sites, Clusters, Nodes and Search tabs, in that order."""
     app = TabsApp()
     async with app.run_test():
@@ -30,7 +30,7 @@ async def test_has_a_tab_per_panel():
         assert [pane.id for pane in panes] == ['sites', 'clusters', 'nodes', 'search']
 
 
-async def test_show_switches_tab():
+async def test_show_switches_tab() -> None:
     """show() switches to the tab with that id."""
     app = TabsApp()
     async with app.run_test():
@@ -40,7 +40,7 @@ async def test_show_switches_tab():
         assert app.query_one(TabbedContent).active == 'clusters'
 
 
-async def test_stylesheet_is_loaded():
+async def test_stylesheet_is_loaded() -> None:
     """main_tabs.tcss is loaded: the tabs fill the screen."""
     app = TabsApp()
     async with app.run_test(size=(60, 12)):

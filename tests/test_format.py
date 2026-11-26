@@ -3,7 +3,7 @@
 from grid_tui.format import duration, interval, number, size, yes_no
 
 
-def test_size():
+def test_size() -> None:
     """Sizes use the biggest unit that fits; 0 is empty."""
     assert size(96 * 1024**3) == '96 GiB'
     assert size(2 * 1024**4) == '2 TiB'
@@ -13,19 +13,19 @@ def test_size():
     assert size(0) == ''
 
 
-def test_number():
+def test_number() -> None:
     """Numbers drop a needless .0; 0 is empty."""
     assert number(18) == '18'
     assert number(2.5) == '2.5'
     assert number(0) == ''
 
 
-def test_yes_no():
+def test_yes_no() -> None:
     """A flag reads as yes or no."""
     assert (yes_no(True), yes_no(False)) == ('yes', 'no')
 
 
-def test_duration():
+def test_duration() -> None:
     """Seconds read as hours and minutes; 0 is empty."""
     assert duration(7200) == '2 h'
     assert duration(5400) == '1 h 30 min'
@@ -34,7 +34,7 @@ def test_duration():
     assert duration(0) == ''
 
 
-def test_interval():
+def test_interval() -> None:
     """Milliseconds read as ms, s or min; 0 is empty."""
     assert interval(20) == '20 ms'
     assert interval(1000) == '1 s'

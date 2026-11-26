@@ -1,9 +1,11 @@
 """The Sites panel: a table of every Grid'5000 site."""
 
 from pathlib import Path
+from typing import Any
 
 import httpx
 from textual import on, work
+from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable
@@ -29,7 +31,7 @@ class SitesPanel(Widget):
             super().__init__()
             self.site = site
 
-    def __init__(self, client: Client, **kwargs) -> None:
+    def __init__(self, client: Client, **kwargs: Any) -> None:
         """Make the panel.
 
         Args:
@@ -39,7 +41,7 @@ class SitesPanel(Widget):
         super().__init__(**kwargs)
         self.client = client
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The panel's widgets: one table, one row per site."""
         yield DataTable(cursor_type='row', zebra_stripes=True)
 

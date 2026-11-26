@@ -1,9 +1,11 @@
 """The Clusters panel: a table of every Grid'5000 cluster, or one site's."""
 
 from pathlib import Path
+from typing import Any
 
 import httpx
 from textual import on, work
+from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
 from textual.widget import Widget
@@ -32,7 +34,7 @@ class ClusterPanel(Widget):
             self.site = site
             self.cluster = cluster
 
-    def __init__(self, client: Client, site: str | None = None, **kwargs) -> None:
+    def __init__(self, client: Client, site: str | None = None, **kwargs: Any) -> None:
         """Make the panel.
 
         Args:
@@ -46,7 +48,7 @@ class ClusterPanel(Widget):
         self.site = site
         self._dropdown_sites: set[str] = set()  # the sites the dropdown has
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The panel's widgets: a site dropdown on the right, then the table."""
         with Horizontal(id='toolbar'):
             yield Label('Site', id='site-label')

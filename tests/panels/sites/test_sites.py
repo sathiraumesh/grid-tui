@@ -1,8 +1,9 @@
 """Tests for the Sites panel: the table of sites, and choosing one."""
 
-from textual.app import App
+from textual.app import App, ComposeResult
 from textual.widgets import DataTable
 
+from grid_tui.grid5000 import Client
 from grid_tui.panels.sites import SitesPanel
 from tests.grid5000.fakes import g5k_client
 from tests.panels.helpers import rows, settle
@@ -11,7 +12,7 @@ from tests.panels.helpers import rows, settle
 class SitesApp(App):
     """A tiny app that shows only the SitesPanel, and keeps the sites chosen."""
 
-    def __init__(self, client) -> None:
+    def __init__(self, client: Client) -> None:
         """Make the app.
 
         Args:
@@ -21,7 +22,7 @@ class SitesApp(App):
         self.client = client
         self.chosen: list[str] = []
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The only widget: the Sites panel."""
         yield SitesPanel(self.client)
 
@@ -30,7 +31,7 @@ class SitesApp(App):
         self.chosen.append(message.site)
 
 
-async def test_shows_a_row_per_site():
+async def test_shows_a_row_per_site() -> None:
     """Each site is one row: its uid, name and description."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
@@ -41,7 +42,7 @@ async def test_shows_a_row_per_site():
         ]
 
 
-async def test_has_the_columns():
+async def test_has_the_columns() -> None:
     """The columns are Site, Name and Description."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
@@ -50,7 +51,7 @@ async def test_has_the_columns():
         assert [str(c.label) for c in columns] == ['Site', 'Name', 'Description']
 
 
-async def test_no_spinner_after_loading():
+async def test_no_spinner_after_loading() -> None:
     """The spinner is gone once the sites are in."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
@@ -58,7 +59,7 @@ async def test_no_spinner_after_loading():
         assert app.query_one(SitesPanel).loading is False
 
 
-async def test_an_error_shows_a_notification_and_an_empty_table():
+async def test_an_error_shows_a_notification_and_an_empty_table() -> None:
     """A failed load shows a red toast and leaves the table empty."""
     app = SitesApp(g5k_client(status=401))
     async with app.run_test(notifications=True) as pilot:
@@ -70,7 +71,7 @@ async def test_an_error_shows_a_notification_and_an_empty_table():
         assert 'G5K_USER' in note.message
 
 
-async def test_loading_again_does_not_add_the_rows_twice():
+async def test_loading_again_does_not_add_the_rows_twice() -> None:
     """Loading again replaces the rows instead of adding to them."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:
@@ -80,7 +81,7 @@ async def test_loading_again_does_not_add_the_rows_twice():
         assert app.query_one(DataTable).row_count == 2
 
 
-async def test_enter_on_a_row_sends_chosen_with_its_site():
+async def test_enter_on_a_row_sends_chosen_with_its_site() -> None:
     """Enter on a row sends Chosen with that row's site."""
     app = SitesApp(g5k_client())
     async with app.run_test() as pilot:

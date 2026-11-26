@@ -3,6 +3,8 @@
 As each cluster lists them in GET /sites/{site}/clusters, under "metrics".
 """
 
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator
 
 from grid_tui.models.base import ApiModel
@@ -31,19 +33,19 @@ class MetricInfo(ApiModel):
 
     @field_validator('source', mode='before')
     @classmethod
-    def _source_is_an_object(cls, value):
+    def _source_is_an_object(cls, value: Any) -> Any:
         """A source that isn't an object (or a MetricSource) is read as unknown."""
         return value if isinstance(value, (dict, BaseModel)) else {}
 
     @field_validator('labels', mode='before')
     @classmethod
-    def _labels_are_an_object(cls, value):
+    def _labels_are_an_object(cls, value: Any) -> Any:
         """Labels that aren't an object are read as none."""
         return value if isinstance(value, dict) else {}
 
     @field_validator('only_for', mode='before')
     @classmethod
-    def _only_for_is_a_list(cls, value):
+    def _only_for_is_a_list(cls, value: Any) -> Any:
         """only_for that isn't a list (or tuple) is read as every node."""
         return value if isinstance(value, (list, tuple)) else ()
 

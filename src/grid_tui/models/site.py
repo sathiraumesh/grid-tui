@@ -1,5 +1,7 @@
 """A Grid'5000 site."""
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
@@ -14,6 +16,6 @@ class Site(BaseModel):
 
     @field_validator('name', 'description', mode='before')
     @classmethod
-    def _null_is_empty(cls, value):
+    def _null_is_empty(cls, value: Any) -> Any:
         """The API sometimes sends null: read it as ''."""
         return '' if value is None else value

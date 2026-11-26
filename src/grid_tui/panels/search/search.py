@@ -7,9 +7,11 @@ searches are instant. load() (the r key) loads them again.
 
 import asyncio
 from pathlib import Path
+from typing import Any, TypeVar
 
 import httpx
 from textual import on, work
+from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
 from textual.widget import Widget
@@ -62,6 +64,9 @@ def match_row(match: Match) -> tuple[str, ...]:
     )
 
 
+NumberT = TypeVar('NumberT', int, float)  # what a form box is read as
+
+
 class SearchPanel(Widget):
     """A form of hardware needs, and the clusters whose nodes meet them."""
 
@@ -81,7 +86,7 @@ class SearchPanel(Widget):
             self.site = site
             self.cluster = cluster
 
-    def __init__(self, client: Client, **kwargs) -> None:
+    def __init__(self, client: Client, **kwargs: Any) -> None:
         """Make the panel.
 
         Args:
@@ -95,7 +100,7 @@ class SearchPanel(Widget):
         self.matches: list[Match] = []
         self.searched = False  # has a search been run
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The form on two short lines, a status line, then the results."""
         with Horizontal(id='search-form', classes='form-row'):
             yield Label('Cores ≥', classes='form-label')
@@ -194,7 +199,7 @@ class SearchPanel(Widget):
     def requirements(self) -> Requirements:
         """What the form asks for. An empty or odd box is no need."""
 
-        def read(box_id: str, kind):
+        def read(box_id: str, kind: type[NumberT]) -> NumberT:
             text = self.query_one(box_id, Input).value.strip()
             try:
                 return max(kind(text), 0) if text else 0

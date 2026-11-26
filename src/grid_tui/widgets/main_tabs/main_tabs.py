@@ -1,7 +1,9 @@
 """The tab bar at the top of the app."""
 
 from pathlib import Path
+from typing import Any
 
+from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import TabbedContent, TabPane
 
@@ -18,7 +20,7 @@ class MainTabs(Widget):
     # styles live in main_tabs.tcss next to this file
     DEFAULT_CSS = (Path(__file__).parent / 'main_tabs.tcss').read_text()
 
-    def __init__(self, client: Client, **kwargs) -> None:
+    def __init__(self, client: Client, **kwargs: Any) -> None:
         """Make the tabs.
 
         Args:
@@ -28,7 +30,7 @@ class MainTabs(Widget):
         super().__init__(**kwargs)
         self.client = client
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The tabs and their panels: Sites, Clusters, Nodes and Search."""
         with TabbedContent(initial='sites'):
             with TabPane('Sites', id='sites'):

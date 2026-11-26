@@ -68,7 +68,9 @@ NODES = {
 }
 
 
-def fake_api(status: int = 200, json: dict | None = None, seen: list | None = None):
+def fake_api(
+    status: int = 200, json: dict | None = None, seen: list | None = None
+) -> httpx.MockTransport:
     """A fake transport: answers every request with status and json,
     and keeps the requests in seen (if given) so a test can check them."""
 
@@ -86,7 +88,7 @@ def fake_grid5000(
     status: int = 200,
     seen: list | None = None,
     nodes: dict[tuple[str, str], list[dict]] | None = None,
-):
+) -> httpx.MockTransport:
     """A fake transport that answers like Grid'5000, path by path:
 
     /sites                                       → sites

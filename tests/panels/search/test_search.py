@@ -1,8 +1,12 @@
 """Tests for the Search panel: the form, the results, and choosing one."""
 
-from textual.app import App
+from typing import Any
+
+from textual.app import App, ComposeResult
+from textual.pilot import Pilot
 from textual.widgets import Checkbox, DataTable, Input, Label, Select
 
+from grid_tui.grid5000 import Client
 from grid_tui.panels.search import SearchPanel
 from grid_tui.panels.search.search import COLUMNS, HINT
 from grid_tui.requirements import ANY_GPU, Requirements
@@ -13,7 +17,7 @@ from tests.panels.helpers import rows, settle
 class SearchApp(App):
     """A tiny app that shows only the SearchPanel, and keeps the clusters chosen."""
 
-    def __init__(self, client) -> None:
+    def __init__(self, client: Client) -> None:
         """Make the app.
 
         Args:
@@ -23,7 +27,7 @@ class SearchApp(App):
         self.client = client
         self.chosen: list[tuple[str, str]] = []
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The only widget: the Search panel."""
         yield SearchPanel(self.client)
 
@@ -47,7 +51,7 @@ def status(app: App) -> str:
     return str(app.query_one('#search-status', Label).render())
 
 
-async def search_with(app: App, pilot, **boxes) -> None:
+async def search_with(app: App, pilot: Pilot, **boxes: Any) -> None:
     """Fill the form (cores, ram, gpu, disk, wattmeter, site) and search.
 
     gpu, disk and site: a value to pick, or None for the dropdown's blank.
@@ -76,7 +80,7 @@ async def search_with(app: App, pilot, **boxes) -> None:
 # Before searching
 
 
-async def test_starts_with_a_hint_and_no_results():
+async def test_starts_with_a_hint_and_no_results() -> None:
     """Before a search, the table is empty and the status says what to do."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -85,7 +89,7 @@ async def test_starts_with_a_hint_and_no_results():
         assert status(app) == HINT
 
 
-async def test_has_the_columns():
+async def test_has_the_columns() -> None:
     """The results have a cluster's name and its hardware."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -94,7 +98,7 @@ async def test_has_the_columns():
         assert [str(c.label) for c in columns] == list(COLUMNS)
 
 
-async def test_an_empty_form_asks_for_nothing():
+async def test_an_empty_form_asks_for_nothing() -> None:
     """Empty boxes and no ticks mean no needs."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -102,7 +106,7 @@ async def test_an_empty_form_asks_for_nothing():
         assert panel(app).requirements() == Requirements()
 
 
-async def test_the_form_reads_every_need():
+async def test_the_form_reads_every_need() -> None:
     """The boxes, ticks and site become the Requirements."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -126,7 +130,7 @@ async def test_the_form_reads_every_need():
 # Searching
 
 
-async def test_no_needs_finds_every_cluster_with_nodes():
+async def test_no_needs_finds_every_cluster_with_nodes() -> None:
     """With no needs, every cluster that has nodes is found, by site."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -136,7 +140,7 @@ async def test_no_needs_finds_every_cluster_with_nodes():
         assert status(app) == '3 cluster(s), 4 node(s) match.'
 
 
-async def test_min_cores_and_ram():
+async def test_min_cores_and_ram() -> None:
     """Cores and RAM leave out the clusters with no big enough node."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -145,7 +149,7 @@ async def test_min_cores_and_ram():
         assert found(app) == [('lyon', 'nova')]  # grisou: 16 cores; gros: 96 GiB
 
 
-async def test_gpu_disk_and_wattmeter():
+async def test_gpu_disk_and_wattmeter() -> None:
     """Each need finds the clusters with that hardware."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -159,7 +163,7 @@ async def test_gpu_disk_and_wattmeter():
         assert found(app) == [('lyon', 'nova'), ('nancy', 'gros')]
 
 
-async def test_a_result_row_counts_the_good_nodes():
+async def test_a_result_row_counts_the_good_nodes() -> None:
     """The Nodes cell is good nodes / all nodes, and the hardware is shown."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -171,7 +175,7 @@ async def test_a_result_row_counts_the_good_nodes():
         assert row[-1] == 'yes'
 
 
-async def test_by_site():
+async def test_by_site() -> None:
     """With a site, only its clusters are found."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -180,7 +184,7 @@ async def test_by_site():
         assert found(app) == [('nancy', 'grisou'), ('nancy', 'gros')]
 
 
-async def test_no_match_says_so():
+async def test_no_match_says_so() -> None:
     """When nothing matches, the table is empty and the status says so."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -190,7 +194,7 @@ async def test_no_match_says_so():
         assert status(app) == 'No cluster has a node that meets all of that.'
 
 
-async def test_enter_in_a_box_searches():
+async def test_enter_in_a_box_searches() -> None:
     """Enter in a box runs the search."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -201,7 +205,7 @@ async def test_enter_in_a_box_searches():
         assert found(app) == [('lyon', 'nova')]
 
 
-async def test_the_nodes_are_loaded_once():
+async def test_the_nodes_are_loaded_once() -> None:
     """The second search uses what the first one loaded."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -212,7 +216,7 @@ async def test_the_nodes_are_loaded_once():
         assert panel(app).found is loaded
 
 
-async def test_load_forgets_and_searches_again():
+async def test_load_forgets_and_searches_again() -> None:
     """load() (the r key) loads everything again and re-runs the last search."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -225,7 +229,7 @@ async def test_load_forgets_and_searches_again():
         assert found(app) == [('lyon', 'nova')]
 
 
-async def test_an_error_shows_a_notification():
+async def test_an_error_shows_a_notification() -> None:
     """If the clusters can't be loaded, a red toast says so."""
     app = SearchApp(g5k_client(status=401))
     async with app.run_test(size=(120, 30), notifications=True) as pilot:
@@ -236,7 +240,7 @@ async def test_an_error_shows_a_notification():
         assert 'r to try again' in status(app)
 
 
-async def test_a_cluster_whose_nodes_fail_is_left_out_with_a_warning():
+async def test_a_cluster_whose_nodes_fail_is_left_out_with_a_warning() -> None:
     """A cluster with no nodes answer is skipped; the others are still found."""
     nodes = {key: value for key, value in NODES.items() if key != ('nancy', 'grisou')}
     app = SearchApp(fake_client(SITES, CLUSTERS, nodes=nodes))  # grisou: a 404
@@ -252,7 +256,7 @@ async def test_a_cluster_whose_nodes_fail_is_left_out_with_a_warning():
 # Choosing a result
 
 
-async def test_enter_on_a_result_sends_chosen():
+async def test_enter_on_a_result_sends_chosen() -> None:
     """Enter on a result sends Chosen with its site and cluster."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -267,7 +271,7 @@ async def test_enter_on_a_result_sends_chosen():
 # How the form looks
 
 
-async def test_a_clicked_checkbox_stays_one_row_and_shows_its_x():
+async def test_a_clicked_checkbox_stays_one_row_and_shows_its_x() -> None:
     """Clicking a tick box ticks it, and focus doesn't make it 2 rows tall."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -285,7 +289,7 @@ async def test_a_clicked_checkbox_stays_one_row_and_shows_its_x():
 # Choosing a GPU model and a disk type
 
 
-async def test_the_gpu_list_has_the_models_found():
+async def test_the_gpu_list_has_the_models_found() -> None:
     """Once the nodes are loaded, the GPU list has 'Any GPU' and each model."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -297,7 +301,7 @@ async def test_the_gpu_list_has_the_models_found():
         assert select.selection == ANY_GPU
 
 
-async def test_a_gpu_model_finds_only_its_clusters():
+async def test_a_gpu_model_finds_only_its_clusters() -> None:
     """Picking a GPU model finds the clusters with that model."""
     nodes = {
         **NODES,
@@ -316,7 +320,7 @@ async def test_a_gpu_model_finds_only_its_clusters():
         assert found(app) == [('lyon', 'nova'), ('nancy', 'grisou')]
 
 
-async def test_the_disk_list_has_every_type():
+async def test_the_disk_list_has_every_type() -> None:
     """The disk list offers SSD, HDD and NVMe."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -327,7 +331,7 @@ async def test_the_disk_list_has_every_type():
             assert select.selection == kind
 
 
-async def test_a_gpu_picked_is_kept_when_the_list_is_refilled():
+async def test_a_gpu_picked_is_kept_when_the_list_is_refilled() -> None:
     """Loading again (r) keeps the GPU model that was picked."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
@@ -342,7 +346,7 @@ async def test_a_gpu_picked_is_kept_when_the_list_is_refilled():
 # Loading ahead
 
 
-async def test_the_nodes_load_as_soon_as_the_panel_shows():
+async def test_the_nodes_load_as_soon_as_the_panel_shows() -> None:
     """Showing the panel starts loading the nodes, before any search."""
     app = SearchApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:

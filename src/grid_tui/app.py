@@ -1,6 +1,6 @@
 """The Textual app: the main screen, its keys and its frame."""
 
-from textual.app import App
+from textual.app import App, ComposeResult
 from textual.scrollbar import ScrollBar
 from textual.widgets import Footer
 
@@ -40,12 +40,12 @@ class Grid5KApp(App):
         # the real API by default; tests pass a client with a fake API
         self.client = client or Client.from_env()
 
-    def on_mount(self):
+    def on_mount(self) -> None:
         """Put the app's name and credit in the frame, once the app starts."""
         self.screen.border_title = "Grid'5000"
         self.screen.border_subtitle = 'Powered by IP Paris'
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """The app's widgets: the tabs, and the help line at the bottom."""
         yield MainTabs(self.client)
         yield Footer()
