@@ -35,6 +35,24 @@ CLUSTERS = {
 }
 
 
+# GET /sites/{site}/status: nancy 3 of 4 up nodes busy, lyon 1 of 2 → 4 of 6
+STATUS = {
+    'nancy': {
+        'nodes': {
+            'gros-1.nancy.grid5000.fr': {'hard': 'alive', 'soft': 'busy'},
+            'gros-2.nancy.grid5000.fr': {'hard': 'alive', 'soft': 'busy_free'},
+            'grisou-1.nancy.grid5000.fr': {'hard': 'alive', 'soft': 'busy_besteffort'},
+            'grisou-2.nancy.grid5000.fr': {'hard': 'standby', 'soft': 'free'},
+            'grisou-3.nancy.grid5000.fr': {'hard': 'dead', 'soft': 'unknown'},
+        }
+    },
+    'lyon': {
+        'nodes': {
+            'nova-1.lyon.grid5000.fr': {'hard': 'alive', 'soft': 'busy'},
+            'nova-2.lyon.grid5000.fr': {'hard': 'alive', 'soft': 'free_busy'},
+        }
+    },
+}
 NODES = {
     ('nancy', 'gros'): [
         {
@@ -88,6 +106,8 @@ def fake_grid5000(
     status: int = 200,
     seen: list | None = None,
     nodes: dict[tuple[str, str], list[dict]] | None = None,
+    statuses: dict[str, dict] | None = None,
+    jobs: dict[str, list[dict]] | None = None,
 ) -> httpx.MockTransport:
     """A fake transport that answers like Grid'5000, path by path:
 
@@ -96,6 +116,9 @@ def fake_grid5000(
     /sites/{site}/clusters/{cluster}             → that cluster
     /sites/{site}/clusters/{cluster}/nodes       → nodes[(site, cluster)]
     /sites/{site}/clusters/{cluster}/nodes/{uid} → that node
+    /sites/{site}/status                         → statuses[site]
+    /sites/{site}/jobs                           → jobs[site] (the query is ignored)
+    /sites/{site}/jobs/{uid}                     → that job
 
     Anything it doesn't know is a 404. Every answer has this status instead,
     if it isn't 200 (e.g. 401).
@@ -103,6 +126,8 @@ def fake_grid5000(
     sites = sites or []
     clusters = clusters or {}
     nodes = nodes or {}
+    statuses = statuses or {}
+    jobs = jobs or {}
 
     def handle(request: httpx.Request) -> httpx.Response:
         if seen is not None:
@@ -116,6 +141,19 @@ def fake_grid5000(
             if parts[2] not in clusters:
                 return httpx.Response(404, json={})
             return httpx.Response(200, json={'items': clusters[parts[2]]})
+        if len(parts) in (4, 5) and parts[1] == 'sites' and parts[3] == 'jobs':
+            if parts[2] not in jobs:
+                return httpx.Response(404, json={})
+            if len(parts) == 4:
+                return httpx.Response(200, json={'items': jobs[parts[2]]})
+            for job in jobs[parts[2]]:
+                if str(job['uid']) == parts[4]:
+                    return httpx.Response(200, json=job)
+            return httpx.Response(404, json={})
+        if len(parts) == 4 and parts[1] == 'sites' and parts[3] == 'status':
+            if parts[2] not in statuses:
+                return httpx.Response(404, json={})
+            return httpx.Response(200, json=statuses[parts[2]])
         if len(parts) == 5 and parts[1] == 'sites' and parts[3] == 'clusters':
             for cluster in clusters.get(parts[2], []):
                 if cluster['uid'] == parts[4]:
@@ -140,12 +178,15 @@ def fake_client(
     clusters: dict[str, list[dict]] | None = None,
     status: int = 200,
     nodes: dict[tuple[str, str], list[dict]] | None = None,
+    statuses: dict[str, dict] | None = None,
 ) -> Client:
     """A Client talking to fake_grid5000: no sites unless given, so tests stay
     offline."""
-    return Client(transport=fake_grid5000(sites, clusters, status, nodes=nodes))
+    return Client(
+        transport=fake_grid5000(sites, clusters, status, nodes=nodes, statuses=statuses)
+    )
 
 
 def g5k_client(status: int = 200) -> Client:
-    """A Client talking to fake_grid5000 with SITES, CLUSTERS and NODES."""
-    return fake_client(SITES, CLUSTERS, status, nodes=NODES)
+    """A Client talking to fake_grid5000 with SITES, CLUSTERS, NODES and STATUS."""
+    return fake_client(SITES, CLUSTERS, status, nodes=NODES, statuses=STATUS)

@@ -2,6 +2,7 @@
 
 from grid_tui.models.base import ApiModel
 from grid_tui.models.cluster import Cluster, Link
+from grid_tui.models.job import Job
 from grid_tui.models.metric import MetricInfo, MetricSource
 from grid_tui.models.node import (
     Architecture,
@@ -21,6 +22,7 @@ from grid_tui.models.node import (
     StorageDevice,
 )
 from grid_tui.models.site import Site
+from grid_tui.models.usage import Usage
 
 __all__ = [
     'ApiModel',
@@ -29,6 +31,7 @@ __all__ = [
     'Chassis',
     'Cluster',
     'Gpu',
+    'Job',
     'JobTypes',
     'Link',
     'Memory',
@@ -44,4 +47,5 @@ __all__ = [
     'Processor',
     'Site',
     'StorageDevice',
+    'Usage',
 ]

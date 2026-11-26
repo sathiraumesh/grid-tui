@@ -5,6 +5,7 @@
     await client.sites.list_clusters('nancy')          # a site's clusters
     await client.nodes.list('nancy', 'gros')           # a cluster's nodes
     await client.nodes.get('nancy', 'gros', 'gros-1')  # one node
+    await client.status.usage()                        # how busy it all is now
 
 To add a part, write it like sites.py and register it in __init__ below,
 e.g. self.jobs = JobsClient(**settings).
@@ -16,8 +17,10 @@ import httpx
 
 from grid_tui.grid5000.base import DEFAULT_BASE_URL, settings_from_env
 from grid_tui.grid5000.cache import Cache
+from grid_tui.grid5000.jobs import JobsClient
 from grid_tui.grid5000.nodes import NodesClient
 from grid_tui.grid5000.sites import SitesClient
+from grid_tui.grid5000.status import StatusClient
 
 
 class Client:
@@ -56,6 +59,8 @@ class Client:
         # the parts of the API
         self.sites = SitesClient(**settings)
         self.nodes = NodesClient(**settings)
+        self.status = StatusClient(**settings)
+        self.jobs = JobsClient(**settings)
 
     @classmethod
     def from_env(cls) -> Client:

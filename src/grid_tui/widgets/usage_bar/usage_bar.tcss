@@ -1,0 +1,8 @@
+/* Styles for the UsageBar: one line in the top-right corner, over the tab row */
+
+UsageBar {
+    position: absolute;     /* placed by its offset (see place()): it takes */
+    height: 1;              /* no room from the tabs, and its width is only */
+    padding: 0 1;           /* its text, so the tabs stay clickable */
+    background: transparent;
+}

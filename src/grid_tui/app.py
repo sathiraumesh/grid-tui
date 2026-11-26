@@ -11,6 +11,7 @@ from grid_tui.widgets.panels.nodes import NodesPanel
 from grid_tui.widgets.panels.search import SearchPanel
 from grid_tui.widgets.panels.sites import SitesPanel
 from grid_tui.widgets.thin_scrollbar import ThinScrollBarRender
+from grid_tui.widgets.usage_bar import UsageBar
 
 # every scrollbar in the app: a thin line, the same thickness both ways
 ScrollBar.renderer = ThinScrollBarRender
@@ -46,24 +47,32 @@ class Grid5KApp(App):
         self.screen.border_subtitle = 'Powered by IP Paris'
 
     def compose(self) -> ComposeResult:
-        """The app's widgets: the tabs, and the help line at the bottom."""
+        """The app's widgets: the tabs, how busy it is (top right), the help line."""
         yield MainTabs(self.client)
+        yield UsageBar(self.client)
         yield Footer()
 
     def on_sites_panel_chosen(self, message: SitesPanel.Chosen) -> None:
         """A site was chosen in the Sites tab: show its clusters."""
         self.query_one(MainTabs).show('clusters')
         self.query_one(ClusterPanel).show_site(message.site)
+        self.query_one(UsageBar).show_site(message.site)
 
     def on_cluster_panel_chosen(self, message: ClusterPanel.Chosen) -> None:
         """A cluster was chosen in the Clusters tab: show its nodes."""
         self.query_one(MainTabs).show('nodes')
         self.query_one(NodesPanel).show_cluster(message.site, message.cluster)
+        self.query_one(UsageBar).show_site(message.site)
 
     def on_search_panel_chosen(self, message: SearchPanel.Chosen) -> None:
         """A cluster was chosen in the Search tab: show its nodes."""
         self.query_one(MainTabs).show('nodes')
         self.query_one(NodesPanel).show_cluster(message.site, message.cluster)
+        self.query_one(UsageBar).show_site(message.site)
+
+    def on_resize(self) -> None:
+        """The terminal changed size: keep the usage line in the top-right corner."""
+        self.query_one(UsageBar).place()
 
     def action_reload(self) -> None:
         """Load the tab that is showing again, from the API, not the cache (r)."""
