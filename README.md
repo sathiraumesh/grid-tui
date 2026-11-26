@@ -58,12 +58,14 @@ pytest
 pyproject.toml          dependencies and the grid-tui command
 src/grid_tui/
   app.py                the Textual App: the main screen
-  api.py                what the panels load with (the Grid'5000 client, a fake in tests)
-  format.py             how times read
-  grid5000/             the API client: sites, clusters, hardware, status, jobs
-  models/               the data: Site, Cluster, Hardware, Node, Gantt, JobRequest, Job, …
-  panels/               one per tab: sites, clusters, nodes, reservations (Current), reserve, jobs, search
-  screens/              main (the tabs), splash (at start-up), reserve (the dialogs)
-  widgets/              list_panel (a table loaded in the background), timeline + reservations (the Gantt chart)
+  format.py             how sizes, numbers and times read
+  requirements.py       the Search tab's hardware needs, and which nodes meet them
+  grid5000/             the API client: sites, clusters, nodes (login from ~/.grid-secret)
+  models/               the data: Site, Cluster, Node, MetricInfo, …
+  widgets/
+    main_tabs/          the tabs, one panel in each
+    panels/             what each tab shows: sites, clusters, nodes, search
+    popups/             screens that open over the app: node_details
+    thin_scrollbar/     a slimmer scrollbar
 tests/                  the same folders as src/grid_tui
 ```
