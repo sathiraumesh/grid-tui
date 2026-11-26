@@ -60,12 +60,15 @@ src/grid_tui/
   app.py                the Textual App: the main screen
   format.py             how sizes, numbers and times read
   requirements.py       the Search tab's hardware needs, and which nodes meet them
-  grid5000/             the API client: sites, clusters, nodes (login from ~/.grid-secret)
+  policy.py             the usage policy's periods: day, night, weekend, holidays
+  my_usage.py           your jobs now, and today's daytime quota
+  grid5000/             the API client: sites, clusters, nodes, status, jobs (login from ~/.grid-secret)
   models/               the data: Site, Cluster, Node, MetricInfo, …
   widgets/
     main_tabs/          the tabs, one panel in each
     panels/             what each tab shows: sites, clusters, nodes, search
     popups/             screens that open over the app: node_details
     thin_scrollbar/     a slimmer scrollbar
+    usage_bar/          the top-right line: policy period, your usage, how busy
 tests/                  the same folders as src/grid_tui
 ```

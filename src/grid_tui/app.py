@@ -58,6 +58,10 @@ class Grid5KApp(App):
         self.query_one(ClusterPanel).show_site(message.site)
         self.query_one(UsageBar).show_site(message.site)
 
+    def on_sites_panel_highlighted(self, message: SitesPanel.Highlighted) -> None:
+        """You moved onto a site in the Sites tab: show its usage, top right."""
+        self.query_one(UsageBar).show_site(message.site)
+
     def on_cluster_panel_chosen(self, message: ClusterPanel.Chosen) -> None:
         """A cluster was chosen in the Clusters tab: show its nodes."""
         self.query_one(MainTabs).show('nodes')

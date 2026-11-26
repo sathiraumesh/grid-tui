@@ -21,10 +21,15 @@ class SitesApp(App):
         super().__init__()
         self.client = client
         self.chosen: list[str] = []
+        self.highlighted: list[str] = []
 
     def compose(self) -> ComposeResult:
         """The only widget: the Sites panel."""
         yield SitesPanel(self.client)
+
+    def on_sites_panel_highlighted(self, message: SitesPanel.Highlighted) -> None:
+        """Keep each site the panel says was moved onto."""
+        self.highlighted.append(message.site)
 
     def on_sites_panel_chosen(self, message: SitesPanel.Chosen) -> None:
         """Keep each site the panel says was chosen."""
@@ -90,3 +95,25 @@ async def test_enter_on_a_row_sends_chosen_with_its_site() -> None:
         await pilot.press('down', 'enter')  # the second row: lyon
         await pilot.pause()
         assert app.chosen == ['lyon']
+
+
+async def test_moving_onto_a_site_says_so() -> None:
+    """Arrow keys and single clicks send Highlighted with the site."""
+    app = SitesApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        app.query_one(DataTable).focus()
+        await pilot.press('down')
+        await pilot.pause()
+        assert app.highlighted == ['lyon']
+        assert app.chosen == []  # moving onto it isn't choosing it
+
+
+async def test_filling_the_table_isnt_a_highlight() -> None:
+    """Loading or reloading the sites doesn't count as moving onto one."""
+    app = SitesApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        app.query_one(SitesPanel).load(refresh=True)
+        await settle(app, pilot)
+        assert app.highlighted == []

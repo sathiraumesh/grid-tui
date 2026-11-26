@@ -1,14 +1,16 @@
-"""The top-right line: the policy period, your usage, and how busy a site is.
+"""The top-right line: the policy period, your usage, and how busy it is.
 
-    Day · until 19:00   You ██░░░░░░  12% quota · 1 job, 32 cores   nancy 91% busy
+    Day · until 19:00   You ██░░░░░░ 12% quota · 1 job   nancy 91% · G5K 69% busy
 
-It is about one site: the one you last chose (a site, or a cluster's site).
-Until you choose one, it is about all of Grid'5000 ('G5K').
+It follows a site: the one highlighted in the Sites tab, or the last site or
+cluster chosen. Until there is one, your usage is about every site.
 
 - The period comes from the clock (see grid_tui.policy).
 - Your usage (green) is your share of today's daytime quota on your most used
   cluster of the site, and what you run there now (see grid_tui.my_usage).
-- How busy: the site's nodes that run a job, of those that are up.
+- How busy: the site's nodes that run a job, of those that are up, and the
+  same for all of Grid'5000 ('G5K'). Every site's status comes in one round,
+  so switching site shows its number at once.
 
 Both are asked for again every minute. The line sits over the tab row's empty
 right side and takes no room from the tabs.
@@ -88,7 +90,7 @@ class UsageBar(Static):
         self.client = client
         self.clock = clock or (lambda: datetime.now(PARIS))
         self.mine: MyUsage | None = None  # None until loaded
-        self.platform: Usage | None = None
+        self.by_site: dict[str, Usage] | None = None  # how busy each site is
         self.failed = False  # did the last try fail
         self.site: str | None = None  # the site it's about; None for all
 
@@ -101,7 +103,7 @@ class UsageBar(Static):
         if site == self.site:
             return
         self.site = site
-        self.mine = self.platform = None  # the old site's numbers would mislead
+        self.mine = None  # the old site's would mislead; by_site has every site
         self.redraw()
         self.load()
 
@@ -116,21 +118,29 @@ class UsageBar(Static):
     async def load(self) -> None:
         """Ask for your usage and how busy the site is, together, then redraw."""
         site = self.site
-        mine, platform = await asyncio.gather(
+        mine, by_site = await asyncio.gather(
             my_usage(self.client, self.clock(), site),
-            self.client.status.usage(site),
+            self.client.status.usage_by_site(),
             return_exceptions=True,
         )
         errors = (ApiError, httpx.HTTPError)
-        self.failed = isinstance(mine, errors) or isinstance(platform, errors)
-        for answer in (mine, platform):
+        self.failed = isinstance(mine, errors) or isinstance(by_site, errors)
+        for answer in (mine, by_site):
             if isinstance(answer, BaseException) and not isinstance(answer, errors):
                 raise answer  # a bug, not the network: let it show
-        if isinstance(mine, MyUsage):
+        if isinstance(mine, MyUsage) and site == self.site:  # still that site
             self.mine = mine
-        if isinstance(platform, Usage):
-            self.platform = platform
+        if isinstance(by_site, dict):
+            self.by_site = by_site
         self.redraw()
+
+    def busy(self, site: str | None) -> Usage | None:
+        """How busy a site is (None: all of Grid'5000); None if not known."""
+        if self.by_site is None:
+            return None
+        if site is None:
+            return sum(self.by_site.values(), Usage())
+        return self.by_site.get(site)
 
     def redraw(self) -> None:
         """Draw the line, and put it in the top-right corner."""
@@ -142,7 +152,7 @@ class UsageBar(Static):
         Call it again when the terminal's size changes.
         """
         room = self.parent.size.width if self.parent is not None else 0
-        for detail in (2, 1, 0):  # less and less detail until it fits
+        for detail in (3, 2, 1, 0):  # less and less detail until it fits
             text = self.line(detail)
             if text.cell_len + 2 <= room - TABS_WIDTH:
                 break
@@ -151,17 +161,18 @@ class UsageBar(Static):
         self.styles.width = width
         self.styles.offset = (max(room - width, 0), 0)
 
-    def line(self, detail: int = 2) -> Text:
-        """The line: period, your usage, how busy the platform is.
+    def line(self, detail: int = 3) -> Text:
+        """The line: period, your usage, how busy the site and Grid'5000 are.
 
         Args:
-            detail: 2 for all of it; 1 leaves out how busy the site is;
-                0 also leaves out when the period ends.
+            detail: 3 for all of it; 2 leaves out when the period ends; 1 also
+                leaves out Grid'5000's number (the site's stays); 0 leaves out
+                how busy it is altogether.
         """
         now = self.clock()
         period = period_at(now)
         text = Text(period.name, f'bold {ORANGE}')
-        if detail >= 1:
+        if detail >= 3:
             text.append(f' · until {period.until(now)}', MUTED)
         text.append('   You ', 'bold')
         if self.mine is None:
@@ -174,12 +185,21 @@ class UsageBar(Static):
                 text.append(f' {percent}% quota', f'bold {colour}')
                 text.append(' · ', MUTED)
             text.append(jobs_text(self.mine), GREEN)
-        if detail >= 2:
-            text.append(f'   {self.site or "G5K"} ', MUTED)
-            if self.platform is None:
-                text.append('…' if not self.failed else '?', MUTED)
-            else:
-                text.append(f'{self.platform.percent}% busy', MUTED)
-        if self.failed and (self.mine or self.platform):
+        if detail >= 1:
+            text.append('   ')
+            parts = [self.site] if self.site else []
+            if detail >= 2 or not self.site:
+                parts.append(None)  # all of Grid'5000
+            for index, site in enumerate(parts):
+                if index:
+                    text.append(' · ', MUTED)
+                usage = self.busy(site)
+                number = '?' if self.failed else '…'
+                if usage is not None:
+                    number = f'{usage.percent}%'
+                text.append(f'{site or "G5K"} ', MUTED)
+                text.append(number, 'bold' if site else MUTED)
+            text.append(' busy', MUTED)
+        if self.failed and (self.mine or self.by_site):
             text.append(' (old)', MUTED)  # the last try failed: these are older
         return text

@@ -10,7 +10,7 @@ from grid_tui.my_usage import MyUsage
 from grid_tui.policy import PARIS
 from grid_tui.widgets.usage_bar import UsageBar, bar
 from grid_tui.widgets.usage_bar.usage_bar import TABS_WIDTH, jobs_text
-from tests.grid5000.fakes import fake_grid5000, g5k_client
+from tests.grid5000.fakes import SITES, STATUS, fake_grid5000, g5k_client
 from tests.widgets.panels.helpers import settle
 
 THURSDAY_10 = datetime(2026, 11, 26, 10, 0, tzinfo=PARIS)
@@ -110,13 +110,13 @@ async def test_the_tabs_stay_full_width_and_clickable() -> None:
 
 
 async def test_show_site_switches_to_that_site() -> None:
-    """After show_site('lyon'), the line says how busy lyon is."""
+    """After show_site('lyon'), it says how busy lyon is, and all of Grid'5000."""
     app = BarApp()
     async with app.run_test(size=(120, 10)) as pilot:
         await settle(app, pilot)
         app.query_one(UsageBar).show_site('lyon')
         await settle(app, pilot)
-        assert text(app).endswith('lyon 50% busy')
+        assert text(app).endswith('lyon 50% · G5K 67% busy')
         app.query_one(UsageBar).show_site(None)
         await settle(app, pilot)
         assert text(app).endswith('G5K 67% busy')
@@ -137,4 +137,54 @@ async def test_choosing_a_site_in_the_app_follows_it() -> None:
         table.move_cursor(row=0)  # nancy
         await pilot.press('enter')
         await settle(app, pilot)
-        assert text(app).endswith('nancy 75% busy')
+        assert text(app).endswith('nancy 75% · G5K 67% busy')
+
+
+async def test_highlighting_a_site_shows_its_usage_without_opening_it() -> None:
+    """A single click (or arrow key) on a site switches the line; the tab stays."""
+    from textual.widgets import DataTable
+
+    from grid_tui.widgets.main_tabs import MainTabs
+    from grid_tui.widgets.panels.sites import SitesPanel
+
+    app = Grid5KApp(g5k_client())
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        app.query_one(SitesPanel).query_one(DataTable).focus()
+        await pilot.press('down')  # onto lyon
+        await settle(app, pilot)
+        assert text(app).endswith('lyon 50% · G5K 67% busy')
+        assert app.query_one(MainTabs).active == 'sites'  # didn't go inside
+
+
+async def test_switching_site_shows_its_number_without_asking_again() -> None:
+    """Every site's status is already loaded: switching asks for no status."""
+    seen: list = []
+    client = Client(transport=fake_grid5000(SITES, statuses=STATUS, seen=seen))
+
+    class SeenApp(App):
+        def compose(self) -> ComposeResult:
+            yield UsageBar(client, clock=lambda: THURSDAY_10)
+
+    app = SeenApp()
+    async with app.run_test(size=(120, 10)) as pilot:
+        await settle(app, pilot)
+        before = len([r for r in seen if r.url.path.endswith('/status')])
+        bar_widget = app.query_one(UsageBar)
+        bar_widget.site = 'lyon'  # what show_site sets, without a new load
+        bar_widget.redraw()
+        assert text(app).endswith('lyon 50% · G5K 67% busy')
+        after = len([r for r in seen if r.url.path.endswith('/status')])
+        assert after == before
+
+
+async def test_a_narrow_screen_keeps_the_sites_number() -> None:
+    """When space is short, G5K's number goes before the site's."""
+    app = BarApp()
+    async with app.run_test(size=(98, 10)) as pilot:
+        await settle(app, pilot)
+        app.query_one(UsageBar).show_site('lyon')
+        await settle(app, pilot)
+        line = text(app)
+        assert 'lyon 50%' in line
+        assert 'G5K' not in line

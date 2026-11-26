@@ -61,3 +61,12 @@ async def test_usage_of_one_site_asks_only_that_site() -> None:
     client = StatusClient(transport=fake_grid5000(SITES, statuses=STATUS, seen=seen))
     assert await client.usage('lyon') == Usage(busy=1, up=2)
     assert [r.url.path for r in seen] == ['/stable/sites/lyon/status']
+
+
+async def test_usage_by_site() -> None:
+    """usage_by_site gives each site's counts, from one round of requests."""
+    client = StatusClient(transport=fake_grid5000(SITES, statuses=STATUS))
+    assert await client.usage_by_site() == {
+        'nancy': Usage(busy=3, up=4),
+        'lyon': Usage(busy=1, up=2),
+    }

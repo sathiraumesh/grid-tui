@@ -24,23 +24,34 @@ class StatusClient(BaseClient):
         answer = await self._get(f'/sites/{quote(site, safe="")}/status{LIGHT}')
         return Usage.from_status(answer)
 
+    async def usage_by_site(self) -> dict[str, Usage]:
+        """How busy each site is: {'nancy': Usage(...), 'lyon': ...}.
+
+        A site whose status can't be loaded is left out; if none can be, the
+        first error is raised.
+        """
+        data = await self._get('/sites', cached=True)  # the sites hardly change
+        sites = [Site.model_validate(item).uid for item in data.get('items', [])]
+        answers = await asyncio.gather(
+            *(self.site_usage(site) for site in sites), return_exceptions=True
+        )
+        by_site = {
+            site: answer
+            for site, answer in zip(sites, answers)
+            if isinstance(answer, Usage)
+        }
+        errors = [a for a in answers if isinstance(a, BaseException)]
+        if errors and not by_site:
+            raise errors[0]
+        return by_site
+
     async def usage(self, site: str | None = None) -> Usage:
         """How busy one site is, or all of Grid'5000 (every site together).
 
         Args:
-            site: The site, e.g. 'nancy'; None for every site. With every
-                site, one whose status can't be loaded is left out; if none
-                can be, the first error is raised.
+            site: The site, e.g. 'nancy'; None for every site (see
+                usage_by_site for what happens when some can't be loaded).
         """
         if site is not None:
             return await self.site_usage(site)
-        data = await self._get('/sites', cached=True)  # the sites hardly change
-        sites = [Site.model_validate(item) for item in data.get('items', [])]
-        answers = await asyncio.gather(
-            *(self.site_usage(site.uid) for site in sites), return_exceptions=True
-        )
-        counts = [a for a in answers if isinstance(a, Usage)]
-        errors = [a for a in answers if isinstance(a, BaseException)]
-        if errors and not counts:
-            raise errors[0]
-        return sum(counts, Usage())
+        return sum((await self.usage_by_site()).values(), Usage())

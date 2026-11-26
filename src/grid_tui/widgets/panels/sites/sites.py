@@ -31,6 +31,18 @@ class SitesPanel(Widget):
             super().__init__()
             self.site = site
 
+    class Highlighted(Message):
+        """Sent when you move onto a site (a single click, or the arrow keys)."""
+
+        def __init__(self, site: str) -> None:
+            """Make the message.
+
+            Args:
+                site: The highlighted site's uid, e.g. 'nancy'.
+            """
+            super().__init__()
+            self.site = site
+
     def __init__(self, client: Client, **kwargs: Any) -> None:
         """Make the panel.
 
@@ -40,6 +52,8 @@ class SitesPanel(Widget):
         """
         super().__init__(**kwargs)
         self.client = client
+        # filling the table highlights its first row by itself: that isn't you
+        self._skip_highlight = False
 
     def compose(self) -> ComposeResult:
         """The panel's widgets: one table, one row per site."""
@@ -73,6 +87,15 @@ class SitesPanel(Widget):
         table.clear()
         for site in sites:
             table.add_row(site.uid, site.name, site.description, key=site.uid)
+        self._skip_highlight = bool(sites)
+
+    @on(DataTable.RowHighlighted)
+    def _site_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """You moved onto a row: tell the app which site it is."""
+        if self._skip_highlight:  # the table filling up, not you
+            self._skip_highlight = False
+            return
+        self.post_message(self.Highlighted(event.row_key.value))
 
     @on(DataTable.RowSelected)
     def _site_chosen(self, event: DataTable.RowSelected) -> None:
