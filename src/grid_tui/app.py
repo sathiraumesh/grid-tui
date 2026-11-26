@@ -7,6 +7,7 @@ from textual.widgets import Footer
 from grid_tui.grid5000 import Client
 from grid_tui.panels.clusters import ClusterPanel
 from grid_tui.panels.nodes import NodesPanel
+from grid_tui.panels.search import SearchPanel
 from grid_tui.panels.sites import SitesPanel
 from grid_tui.widgets.main_tabs import MainTabs
 from grid_tui.widgets.thin_scrollbar import ThinScrollBarRender
@@ -25,6 +26,7 @@ class Grid5KApp(App):
         ('1', "show_tab('sites')", 'Sites'),
         ('2', "show_tab('clusters')", 'Clusters'),
         ('3', "show_tab('nodes')", 'Nodes'),
+        ('4', "show_tab('search')", 'Search'),
     ]
 
     def __init__(self, client: Client | None = None) -> None:
@@ -58,14 +60,20 @@ class Grid5KApp(App):
         self.query_one(MainTabs).show('nodes')
         self.query_one(NodesPanel).show_cluster(message.site, message.cluster)
 
+    def on_search_panel_chosen(self, message: SearchPanel.Chosen) -> None:
+        """A cluster was chosen in the Search tab: show its nodes."""
+        self.query_one(MainTabs).show('nodes')
+        self.query_one(NodesPanel).show_cluster(message.site, message.cluster)
+
     def action_reload(self) -> None:
-        """Load the sites, clusters and nodes again (the r key)."""
+        """Load every tab again (the r key)."""
         self.query_one(SitesPanel).load()
         self.query_one(ClusterPanel).load()
         self.query_one(NodesPanel).load()
+        self.query_one(SearchPanel).load()
 
     def action_show_tab(self, tab: str) -> None:
-        """Switch to the tab with this id (the 1, 2 and 3 keys)."""
+        """Switch to the tab with this id (the 1, 2, 3 and 4 keys)."""
         self.query_one(MainTabs).show(tab)
 
 

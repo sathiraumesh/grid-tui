@@ -8,6 +8,7 @@ from textual.widgets import TabbedContent, TabPane
 from grid_tui.grid5000 import Client
 from grid_tui.panels.clusters import ClusterPanel
 from grid_tui.panels.nodes import NodesPanel
+from grid_tui.panels.search import SearchPanel
 from grid_tui.panels.sites import SitesPanel
 
 
@@ -28,7 +29,7 @@ class MainTabs(Widget):
         self.client = client
 
     def compose(self):
-        """The tabs and their panels: Sites, Clusters and Nodes."""
+        """The tabs and their panels: Sites, Clusters, Nodes and Search."""
         with TabbedContent(initial='sites'):
             with TabPane('Sites', id='sites'):
                 yield SitesPanel(self.client)
@@ -36,6 +37,8 @@ class MainTabs(Widget):
                 yield ClusterPanel(self.client)
             with TabPane('Nodes', id='nodes'):
                 yield NodesPanel(self.client)
+            with TabPane('Search', id='search'):
+                yield SearchPanel(self.client)
 
     @property
     def active(self) -> str:

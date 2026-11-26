@@ -46,6 +46,25 @@ NODES = {
         },
         {'uid': 'gros-2', 'cluster': 'gros'},
     ],
+    ('nancy', 'grisou'): [
+        {
+            'uid': 'grisou-1',
+            'cluster': 'grisou',
+            'architecture': {'nb_cores': 16},
+            'main_memory': {'ram_size': 128 * 1024**3},
+            'storage_devices': [{'device': 'sda', 'storage': 'SSD', 'size': 1024**4}],
+        },
+    ],
+    ('lyon', 'nova'): [
+        {
+            'uid': 'nova-1',
+            'cluster': 'nova',
+            'architecture': {'nb_cores': 32},
+            'main_memory': {'ram_size': 256 * 1024**3},
+            'gpu_devices': {'0': {'vendor': 'Nvidia', 'model': 'Tesla V100'}},
+            'monitoring': {'wattmeter': True},
+        },
+    ],
 }
 
 

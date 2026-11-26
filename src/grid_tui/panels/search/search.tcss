@@ -1,0 +1,129 @@
+/* Styles for the SearchPanel */
+
+SearchPanel {
+    height: 1fr;
+}
+
+SearchPanel .form-row {
+    height: 1;
+}
+
+SearchPanel #search-where {
+    margin-bottom: 1;
+}
+
+SearchPanel .form-row > * {
+    margin-right: 2;
+}
+
+SearchPanel .form-label {
+    width: auto;
+    padding: 0 1 0 0;
+    color: #a6adc8;
+}
+
+SearchPanel Input {
+    width: 8;
+    background: #313244;
+}
+
+SearchPanel Input:focus {
+    background: #45475a;
+}
+
+SearchPanel Checkbox {
+    width: auto;
+    height: 1;
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+SearchPanel Checkbox:focus,
+SearchPanel Checkbox:hover {
+    border: none;                  /* Textual adds a border on focus: it would make */
+    background: transparent;       /* the box 2 rows tall and cut it off */
+    background-tint: transparent;
+}
+
+SearchPanel Checkbox > .toggle--button {
+    color: #313244;                /* not ticked: an empty dark box */
+    background: #313244;
+}
+
+SearchPanel Checkbox.-on > .toggle--button {
+    color: #fab387;                /* ticked: an orange X */
+    background: #313244;
+    text-style: bold;
+}
+
+SearchPanel Checkbox > .toggle--label {
+    color: #cdd6f4;
+    background: transparent;
+}
+
+SearchPanel Checkbox:focus > .toggle--label {
+    color: #fab387;                /* the one with focus: an orange label */
+    background: transparent;
+    text-style: bold;
+}
+
+/* the dropdowns: GPU, disk and site */
+
+SearchPanel #need-gpu {
+    width: 22;
+}
+
+SearchPanel #need-disk {
+    width: 10;
+}
+
+SearchPanel #search-site {
+    width: 16;
+}
+
+SearchPanel Select > SelectCurrent {
+    background: #313244;
+    padding: 0 1;
+}
+
+SearchPanel Select:focus > SelectCurrent {
+    background: #45475a;
+}
+
+SearchPanel Select > SelectCurrent .arrow {
+    color: #fab387;
+}
+
+SearchPanel Select > SelectOverlay {
+    border: round #fab387;
+    background: #313244;
+}
+
+SearchPanel #search-button {
+    min-width: 10;
+    background: #fab387;
+    color: #1e1e2e;
+    text-style: bold;
+}
+
+SearchPanel #search-status {
+    height: 1;
+    margin-bottom: 1;
+    color: #a6adc8;
+}
+
+SearchPanel DataTable {
+    height: 1fr;
+    background: #1e1e2e;
+}
+
+SearchPanel DataTable > .datatable--header {
+    color: #fab387;
+    background: #313244;
+    text-style: bold;
+}
+
+SearchPanel DataTable > .datatable--cursor {
+    background: #45475a;
+}
