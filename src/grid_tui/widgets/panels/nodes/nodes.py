@@ -13,7 +13,7 @@ from textual.widgets import DataTable, Label
 from grid_tui.format import number, size
 from grid_tui.grid5000 import ApiError, Client
 from grid_tui.models import Cluster, MetricInfo, Node
-from grid_tui.screens.node_details import NodeDetails
+from grid_tui.widgets.popups.node_details import NodeDetails
 
 HINT = 'Choose a cluster in the Clusters tab (Enter) to see its nodes.'
 COLUMNS = ('Node', 'CPU', 'GHz', 'Cores', 'Threads', 'RAM', 'Disks', 'Network', 'GPUs')

@@ -4,12 +4,12 @@ from textual.app import App, ComposeResult
 from textual.widgets import DataTable
 
 from grid_tui.models import MetricInfo, Node
-from grid_tui.panels.nodes import NodesPanel
-from grid_tui.screens.node_details import NodeDetails, sections
-from grid_tui.screens.node_details.node_details import metric_text
+from grid_tui.widgets.panels.nodes import NodesPanel
+from grid_tui.widgets.popups.node_details import NodeDetails, sections
+from grid_tui.widgets.popups.node_details.node_details import metric_text
 from tests.grid5000.fakes import NODES, fake_client, g5k_client
 from tests.models.test_node import GROS_12
-from tests.panels.helpers import settle
+from tests.widgets.panels.helpers import settle
 
 WATTMETRE = MetricInfo(
     name='wattmetre_power_watt',

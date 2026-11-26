@@ -3,13 +3,13 @@
 from textual.widgets import DataTable, Select
 
 from grid_tui.app import Grid5KApp
-from grid_tui.panels.clusters import ClusterPanel
-from grid_tui.panels.nodes import NodesPanel
-from grid_tui.panels.search import SearchPanel
-from grid_tui.panels.sites import SitesPanel
 from grid_tui.widgets.main_tabs import MainTabs
+from grid_tui.widgets.panels.clusters import ClusterPanel
+from grid_tui.widgets.panels.nodes import NodesPanel
+from grid_tui.widgets.panels.search import SearchPanel
+from grid_tui.widgets.panels.sites import SitesPanel
 from tests.grid5000.fakes import fake_client, g5k_client
-from tests.panels.helpers import rows, settle
+from tests.widgets.panels.helpers import rows, settle
 
 
 async def test_frame_shows_title_and_subtitle() -> None:

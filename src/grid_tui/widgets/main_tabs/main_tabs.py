@@ -8,10 +8,10 @@ from textual.widget import Widget
 from textual.widgets import TabbedContent, TabPane
 
 from grid_tui.grid5000 import Client
-from grid_tui.panels.clusters import ClusterPanel
-from grid_tui.panels.nodes import NodesPanel
-from grid_tui.panels.search import SearchPanel
-from grid_tui.panels.sites import SitesPanel
+from grid_tui.widgets.panels.clusters import ClusterPanel
+from grid_tui.widgets.panels.nodes import NodesPanel
+from grid_tui.widgets.panels.search import SearchPanel
+from grid_tui.widgets.panels.sites import SitesPanel
 
 
 class MainTabs(Widget):

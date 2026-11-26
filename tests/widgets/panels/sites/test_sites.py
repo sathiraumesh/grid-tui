@@ -4,9 +4,9 @@ from textual.app import App, ComposeResult
 from textual.widgets import DataTable
 
 from grid_tui.grid5000 import Client
-from grid_tui.panels.sites import SitesPanel
+from grid_tui.widgets.panels.sites import SitesPanel
 from tests.grid5000.fakes import g5k_client
-from tests.panels.helpers import rows, settle
+from tests.widgets.panels.helpers import rows, settle
 
 
 class SitesApp(App):

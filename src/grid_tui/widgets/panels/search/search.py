@@ -20,7 +20,6 @@ from textual.widgets import Button, Checkbox, DataTable, Input, Label, Select
 from grid_tui.format import number, size
 from grid_tui.grid5000 import ApiError, Client
 from grid_tui.models import Cluster, Node
-from grid_tui.panels.nodes.nodes import disks, gpus
 from grid_tui.requirements import (
     ANY_GPU,
     DISK_TYPES,
@@ -30,6 +29,7 @@ from grid_tui.requirements import (
     has_wattmeter,
     search,
 )
+from grid_tui.widgets.panels.nodes.nodes import disks, gpus
 
 HINT = 'Set what a node needs, then Search (or Enter in a box).'
 GPU_LOADING = 'GPU models load in the background…'

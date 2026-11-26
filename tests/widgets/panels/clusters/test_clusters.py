@@ -4,9 +4,9 @@ from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Label, Select
 
 from grid_tui.grid5000 import Client
-from grid_tui.panels.clusters import ClusterPanel
+from grid_tui.widgets.panels.clusters import ClusterPanel
 from tests.grid5000.fakes import g5k_client
-from tests.panels.helpers import rows, settle
+from tests.widgets.panels.helpers import rows, settle
 
 
 class ClustersApp(App):

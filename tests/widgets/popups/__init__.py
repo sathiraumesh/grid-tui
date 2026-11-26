@@ -1,1 +1,1 @@
-"""Tests for the screens that open over the app."""
+"""Tests for the pop-up screens that open over the app."""

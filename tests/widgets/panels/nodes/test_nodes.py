@@ -5,10 +5,18 @@ from textual.widgets import DataTable, Label
 
 from grid_tui.grid5000 import Client
 from grid_tui.models import Node
-from grid_tui.panels.nodes import NodesPanel
-from grid_tui.panels.nodes.nodes import COLUMNS, HINT, disks, gpus, network, row, size
+from grid_tui.widgets.panels.nodes import NodesPanel
+from grid_tui.widgets.panels.nodes.nodes import (
+    COLUMNS,
+    HINT,
+    disks,
+    gpus,
+    network,
+    row,
+    size,
+)
 from tests.grid5000.fakes import fake_client, g5k_client
-from tests.panels.helpers import rows, settle
+from tests.widgets.panels.helpers import rows, settle
 
 GIB = 1024**3
 

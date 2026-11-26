@@ -7,11 +7,11 @@ from textual.pilot import Pilot
 from textual.widgets import Checkbox, DataTable, Input, Label, Select
 
 from grid_tui.grid5000 import Client
-from grid_tui.panels.search import SearchPanel
-from grid_tui.panels.search.search import COLUMNS, HINT
 from grid_tui.requirements import ANY_GPU, Requirements
+from grid_tui.widgets.panels.search import SearchPanel
+from grid_tui.widgets.panels.search.search import COLUMNS, HINT
 from tests.grid5000.fakes import CLUSTERS, NODES, SITES, fake_client, g5k_client
-from tests.panels.helpers import rows, settle
+from tests.widgets.panels.helpers import rows, settle
 
 
 class SearchApp(App):
