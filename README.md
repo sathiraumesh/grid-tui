@@ -38,19 +38,19 @@ pytest
 ## Using it
 
 ```
- 1 Sites   2 Clusters   3 Nodes   4 Reservations   7 Search
-                                  └ 4 Current   5 Reserve   6 My reservations
+ 1 Sites   2 Clusters   3 Nodes   4 Reservations   5 Search
 ```
 
-- **1 Sites → 2 Clusters → 3 Nodes → 4 Current**: `enter` goes down (a site's
-  clusters, a cluster's hardware and nodes, a node's reservations), `esc` back up.
-- **4 Current**: a cluster's reservations as a time line, a week or a month
-  (`t w m`); `b` reserves from the cursor, `x` cancels one of your jobs.
-- **5 Reserve**: choose a date, a time, a duration and how many nodes; see which
-  clusters can take it; reserve on one (`Reserve`, then `Yes, send`).
-- **6 My reservations**: your jobs on every site; `x` cancels, `enter` shows one's cluster.
-- **7 Search**: the clusters of every site that meet a form of requirements.
-- `1`–`7` go to a tab (form fields take digits); `r` reloads the tab that is showing; `q` quits.
+- **1 Sites → 2 Clusters → 3 Nodes**: `enter` goes down (a site's clusters, a
+  cluster's nodes, a node's details). Moving onto a site shows its usage top right.
+- **2 Clusters**: `s` (or `SSH ›`) opens a shell on the site's frontend.
+- **4 Reservations**: a cluster's reservations on a timeline: nodes down the
+  side, time across, an orange line for now, the daytime-quota hours shaded.
+  Set *nodes* and *hours* to find the next free slot. `z` zooms (12 h to 7 days),
+  `[` `]` move earlier and later, `n` comes back to now.
+- **5 Search**: the clusters of every site that meet a form of requirements.
+- Top right: the policy period, your quota and jobs, and how busy it is.
+- `1`–`5` go to a tab (form fields take digits); `r` reloads the tab; `q` quits.
 
 ## Layout
 
@@ -66,7 +66,7 @@ src/grid_tui/
   models/               the data: Site, Cluster, Node, MetricInfo, …
   widgets/
     main_tabs/          the tabs, one panel in each
-    panels/             what each tab shows: sites, clusters, nodes, search
+    panels/             what each tab shows: sites, clusters, nodes, reservations, search
     popups/             screens that open over the app: node_details
     thin_scrollbar/     a slimmer scrollbar
     usage_bar/          the top-right line: policy period, your usage, how busy

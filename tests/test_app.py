@@ -63,6 +63,8 @@ async def test_number_keys_switch_tabs() -> None:
         await pilot.press('3')
         assert tabs.active == 'nodes'
         await pilot.press('4')
+        assert tabs.active == 'reservations'
+        await pilot.press('5')
         assert tabs.active == 'search'
         await pilot.press('1')
         assert tabs.active == 'sites'
@@ -210,7 +212,7 @@ async def test_a_search_result_opens_its_nodes() -> None:
     app = Grid5KApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
         await settle(app, pilot)
-        await pilot.press('4')
+        await pilot.press('5')
         app.query_one(SearchPanel).run_search()  # no needs: every cluster with nodes
         await settle(app, pilot)
         app.query_one(SearchPanel).query_one(DataTable).focus()
@@ -226,7 +228,7 @@ async def test_digits_typed_in_the_search_form_stay_in_the_box() -> None:
     app = Grid5KApp(g5k_client())
     async with app.run_test(size=(120, 30)) as pilot:
         await settle(app, pilot)
-        await pilot.press('4')
+        await pilot.press('5')
         app.query_one('#min-cores').focus()
         await pilot.press('3', '2')
         assert app.query_one(MainTabs).active == 'search'
@@ -240,6 +242,6 @@ async def test_search_loads_nothing_until_its_tab_is_opened() -> None:
         await settle(app, pilot)
         search = app.query_one(SearchPanel)
         assert search.found is None
-        await pilot.press('4')
+        await pilot.press('5')
         await settle(app, pilot)
         assert search.found is not None

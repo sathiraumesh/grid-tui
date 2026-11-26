@@ -61,13 +61,16 @@ async def test_a_finished_jobs_details_are_cached() -> None:
     assert len(asked) == len(asked_again) == 1
 
 
-async def test_a_running_jobs_details_are_asked_each_time() -> None:
-    """A running job can change: asked for every time."""
+async def test_a_running_job_is_remembered_for_a_while() -> None:
+    """A running job can change: asked again only after FRESH_FOR, or with r."""
     seen = []
     jobs = client(seen)
     await jobs.mine_today(MIDNIGHT)
-    await jobs.mine_today(MIDNIGHT)
-    assert len([r for r in seen if r.url.path.endswith('/jobs/1')]) == 2
+    await jobs.mine_today(MIDNIGHT)  # within FRESH_FOR: from memory
+    assert len([r for r in seen if r.url.path.endswith('/jobs/1')]) == 1
+    lists = len([r for r in seen if r.url.path.endswith('/nancy/jobs')])
+    await jobs.mine_today(MIDNIGHT, refresh=True)  # r: the lists are asked again
+    assert len([r for r in seen if r.url.path.endswith('/nancy/jobs')]) == lists + 1
 
 
 async def test_no_login_no_jobs() -> None:

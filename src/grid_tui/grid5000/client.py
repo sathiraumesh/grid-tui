@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import httpx
 
-from grid_tui.grid5000.base import DEFAULT_BASE_URL, settings_from_env
+from grid_tui.grid5000.base import DEFAULT_BASE_URL, Connection, settings_from_env
 from grid_tui.grid5000.cache import Cache
 from grid_tui.grid5000.jobs import JobsClient
 from grid_tui.grid5000.nodes import NodesClient
@@ -48,6 +48,10 @@ class Client:
                 for them all. None saves nothing.
         """
         self.cache = cache
+        # one connection for every part: kept open, and shared answers
+        self.connection = Connection(
+            base_url.rstrip('/'), user, password, transport, timeout
+        )
         settings = {
             'base_url': base_url,
             'user': user,
@@ -55,12 +59,17 @@ class Client:
             'transport': transport,
             'timeout': timeout,
             'cache': cache,
+            'connection': self.connection,
         }
         # the parts of the API
         self.sites = SitesClient(**settings)
         self.nodes = NodesClient(**settings)
         self.status = StatusClient(**settings)
         self.jobs = JobsClient(**settings)
+
+    async def aclose(self) -> None:
+        """Close the connection (when the app quits)."""
+        await self.connection.aclose()
 
     @classmethod
     def from_env(cls) -> Client:

@@ -15,22 +15,23 @@ from grid_tui.models.site import Site
 
 # the states worth reading: what runs or will, and what ran (for today's quota)
 STATES = 'running,launching,waiting,terminated,error'
+FRESH_FOR = 240  # seconds your jobs list (and a running job) is remembered
 
 
 class JobsClient(BaseClient):
     """The calls about your jobs."""
 
-    async def mine(self, site: str) -> list[Job]:
+    async def mine(self, site: str, *, refresh: bool = False) -> list[Job]:
         """Your recent jobs on a site (without their nodes or cores)."""
         user = quote(self.user, safe='')
         path = f'/sites/{quote(site, safe="")}/jobs?user={user}&state={STATES}&limit=50'
-        answer = await self._get(path)
+        answer = await self._get(path, fresh_for=FRESH_FOR, refresh=refresh)
         return [Job.from_api(item, site) for item in answer.get('items', [])]
 
     async def get(self, site: str, uid: int) -> Job:
         """One job, with its nodes and cores."""
         path = f'/sites/{quote(site, safe="")}/jobs/{uid}'
-        answer = await self._get(path)
+        answer = await self._get(path, fresh_for=FRESH_FOR)
         job = Job.from_api(answer, site)
         if not job.is_active and self.cache is not None:
             self.cache.put(self.base_url + path, answer)  # finished: won't change
@@ -45,13 +46,16 @@ class JobsClient(BaseClient):
                 return Job.from_api(saved, job.site)
         return await self.get(job.site, job.uid)
 
-    async def mine_today(self, since: datetime, site: str | None = None) -> list[Job]:
+    async def mine_today(
+        self, since: datetime, site: str | None = None, *, refresh: bool = False
+    ) -> list[Job]:
         """Your jobs that run now, will run, or ran since a time.
 
         Args:
             since: Keep finished jobs that started at or after this, e.g.
                 midnight today.
             site: Only this site's jobs, e.g. 'nancy'; None for every site.
+            refresh: Ask the API even for lists asked within FRESH_FOR.
 
         Returns:
             The jobs with their nodes and cores. A site that can't be read is
@@ -65,7 +69,8 @@ class JobsClient(BaseClient):
             data = await self._get('/sites', cached=True)
             uids = [Site.model_validate(item).uid for item in data.get('items', [])]
         listed = await asyncio.gather(
-            *(self.mine(uid) for uid in uids), return_exceptions=True
+            *(self.mine(uid, refresh=refresh) for uid in uids),
+            return_exceptions=True,
         )
         lists = [jobs for jobs in listed if isinstance(jobs, list)]
         errors = [error for error in listed if isinstance(error, BaseException)]

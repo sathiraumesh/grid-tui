@@ -184,7 +184,10 @@ class ClusterPanel(Widget):
             self.notify('Install OpenSSH to connect.', title='No ssh', severity='error')
             return
         command = ssh.ssh_command(site, self.client.sites.user)
+        away = getattr(self.app, 'away', None)  # stop polling during the session
         try:
+            if away:
+                away(True)
             with self.app.suspend():
                 code = ssh.run(command)
         except SuspendNotSupported:
@@ -194,6 +197,9 @@ class ClusterPanel(Widget):
                 severity='warning',
             )
             return
+        finally:
+            if away:
+                away(False)
         if code == ssh.SSH_FAILED:
             self.notify(
                 "Check that your SSH key is added to your Grid'5000 account.",

@@ -19,6 +19,7 @@ right side and takes no room from the tabs.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,7 @@ from typing import Any
 import httpx
 from rich.text import Text
 from textual import work
+from textual.timer import Timer
 from textual.widgets import Static
 
 from grid_tui.grid5000 import ApiError, Client
@@ -35,8 +37,10 @@ from grid_tui.my_usage import MyUsage, my_usage
 from grid_tui.policy import PARIS, period_at
 
 BAR_WIDTH = 8
-REFRESH_SECONDS = 60  # how often to ask the API again
-CLOCK_SECONDS = 30  # how often to check whether the period has changed
+BUSY_SECONDS = 120  # how often to ask how busy every site is
+MINE_SECONDS = 300  # how often to ask for your jobs (r, or a new site: at once)
+TICK_SECONDS = 30  # how often to redraw and see what's old; costs no request
+SETTLE_SECONDS = 0.4  # moving through sites: wait for the cursor to stop
 
 TABS_WIDTH = 34  # the tab labels on the left of the same row: keep clear of them
 GREEN, RED = '#a6e3a1', '#f38ba8'
@@ -93,9 +97,15 @@ class UsageBar(Static):
         self.by_site: dict[str, Usage] | None = None  # how busy each site is
         self.failed = False  # did the last try fail
         self.site: str | None = None  # the site it's about; None for all
+        self._busy_at = self._mine_at = 0.0  # when each was last loaded
+        self._settle: Timer | None = None  # waiting for the cursor to stop
 
     def show_site(self, site: str | None) -> None:
         """Be about another site (None for all of Grid'5000), and load it.
+
+        Moving the cursor through sites calls this for each: the jobs are
+        asked for only once the cursor stops (SETTLE_SECONDS). How busy each
+        site is is already loaded, so that shows at once.
 
         Args:
             site: The site, e.g. 'nancy'; None for every site.
@@ -105,33 +115,73 @@ class UsageBar(Static):
         self.site = site
         self.mine = None  # the old site's would mislead; by_site has every site
         self.redraw()
-        self.load()
+        if self._settle is not None:
+            self._settle.stop()
+        self._settle = self.set_timer(SETTLE_SECONDS, self._load_mine)
+
+    def _load_mine(self) -> None:
+        """The cursor has stopped on a site: load your jobs there."""
+        self._settle = None
+        self.load(busy=False)
 
     def on_mount(self) -> None:
         """Show the period at once, then load, and keep everything up to date."""
         self.redraw()
         self.load()
-        self.set_interval(REFRESH_SECONDS, self.load)
-        self.set_interval(CLOCK_SECONDS, self.redraw)
+        self.set_interval(TICK_SECONDS, self._tick)
+
+    def _tick(self) -> None:
+        """Every 30 s: redraw (the period may change), and load what's old.
+
+        Nothing is asked while the app is in the background or an SSH
+        session runs (see Grid5KApp.polling); when it comes back, the next
+        tick catches up.
+        """
+        if getattr(self.app, 'polling', True):
+            now = time.monotonic()
+            busy = now - self._busy_at >= BUSY_SECONDS
+            mine = now - self._mine_at >= MINE_SECONDS
+            if busy or mine:
+                self.load(busy=busy, mine=mine)
+                return
+        self.redraw()
 
     @work(exclusive=True, group='usage')
-    async def load(self) -> None:
-        """Ask for your usage and how busy the site is, together, then redraw."""
+    async def load(
+        self, *, busy: bool = True, mine: bool = True, refresh: bool = False
+    ) -> None:
+        """Ask for your usage and how busy every site is, then redraw.
+
+        Args:
+            busy: Ask how busy every site is.
+            mine: Ask for your jobs (on the site, or every site).
+            refresh: Ask the API even for answers it remembers.
+        """
         site = self.site
-        mine, by_site = await asyncio.gather(
-            my_usage(self.client, self.clock(), site),
-            self.client.status.usage_by_site(),
+
+        async def nothing() -> None:
+            return None
+
+        answers = await asyncio.gather(
+            my_usage(self.client, self.clock(), site, refresh=refresh)
+            if mine
+            else nothing(),
+            self.client.status.usage_by_site(refresh=refresh) if busy else nothing(),
             return_exceptions=True,
         )
+        mine_answer, by_site = answers
         errors = (ApiError, httpx.HTTPError)
-        self.failed = isinstance(mine, errors) or isinstance(by_site, errors)
-        for answer in (mine, by_site):
+        self.failed = any(isinstance(answer, errors) for answer in answers)
+        for answer in answers:
             if isinstance(answer, BaseException) and not isinstance(answer, errors):
                 raise answer  # a bug, not the network: let it show
-        if isinstance(mine, MyUsage) and site == self.site:  # still that site
-            self.mine = mine
+        now = time.monotonic()
+        if isinstance(mine_answer, MyUsage) and site == self.site:  # still that site
+            self.mine = mine_answer
+            self._mine_at = now
         if isinstance(by_site, dict):
             self.by_site = by_site
+            self._busy_at = now
         self.redraw()
 
     def busy(self, site: str | None) -> Usage | None:
@@ -152,14 +202,24 @@ class UsageBar(Static):
         Call it again when the terminal's size changes.
         """
         room = self.parent.size.width if self.parent is not None else 0
+        tabs_end = self.tabs_end()
         for detail in (3, 2, 1, 0):  # less and less detail until it fits
             text = self.line(detail)
-            if text.cell_len + 2 <= room - TABS_WIDTH:
+            if text.cell_len + 2 <= room - tabs_end:
                 break
         self.update(text)
         width = text.cell_len + 2  # the padding
         self.styles.width = width
         self.styles.offset = (max(room - width, 0), 0)
+
+    def tabs_end(self) -> int:
+        """Where the tab labels end on the row (keep clear of them)."""
+        try:
+            tabs = list(self.screen.query('Tab'))
+        except Exception:  # noqa: BLE001 - not on a screen yet
+            return TABS_WIDTH
+        ends = [tab.region.right for tab in tabs if tab.region.width]
+        return max(ends) + 2 if ends else TABS_WIDTH
 
     def line(self, detail: int = 3) -> Text:
         """The line: period, your usage, how busy the site and Grid'5000 are.

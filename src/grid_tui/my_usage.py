@@ -77,17 +77,20 @@ def daytime_core_seconds(job: Job, now: datetime) -> float:
     return max(overlap, 0.0) * job.cores
 
 
-async def my_usage(client: Client, now: datetime, site: str | None = None) -> MyUsage:
+async def my_usage(
+    client: Client, now: datetime, site: str | None = None, *, refresh: bool = False
+) -> MyUsage:
     """Your use of Grid'5000 at a moment, on one site or all of them.
 
     Args:
         client: Where to ask (it needs your login).
         now: The moment, e.g. datetime.now(PARIS).
         site: Only this site's jobs and clusters, e.g. 'nancy'; None for all.
+        refresh: Ask the API even for answers it remembers.
     """
     now = now.astimezone(PARIS)
     midnight = datetime.combine(now.date(), time(0), tzinfo=PARIS)
-    jobs = await client.jobs.mine_today(midnight, site)
+    jobs = await client.jobs.mine_today(midnight, site, refresh=refresh)
     running = [job for job in jobs if job.is_running]
     waiting = [job for job in jobs if job.is_active and not job.is_running]
     usage = MyUsage(

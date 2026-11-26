@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+import pytest
 from textual.app import App, ComposeResult
 
 from grid_tui.app import Grid5KApp
@@ -9,7 +10,11 @@ from grid_tui.grid5000 import Client
 from grid_tui.my_usage import MyUsage
 from grid_tui.policy import PARIS
 from grid_tui.widgets.usage_bar import UsageBar, bar
-from grid_tui.widgets.usage_bar.usage_bar import TABS_WIDTH, jobs_text
+from grid_tui.widgets.usage_bar.usage_bar import (
+    SETTLE_SECONDS,
+    TABS_WIDTH,
+    jobs_text,
+)
 from tests.grid5000.fakes import SITES, STATUS, fake_grid5000, g5k_client
 from tests.widgets.panels.helpers import settle
 
@@ -184,7 +189,89 @@ async def test_a_narrow_screen_keeps_the_sites_number() -> None:
     async with app.run_test(size=(98, 10)) as pilot:
         await settle(app, pilot)
         app.query_one(UsageBar).show_site('lyon')
+        await pilot.pause(SETTLE_SECONDS + 0.1)  # the cursor has stopped
         await settle(app, pilot)
         line = text(app)
         assert 'lyon 50%' in line
         assert 'G5K' not in line
+
+
+def counting_client(seen: list) -> Client:
+    """A logged-in client on the fake API, keeping the requests in seen."""
+    return Client(
+        user='alice',
+        transport=fake_grid5000(SITES, statuses=STATUS, jobs={'nancy': []}, seen=seen),
+    )
+
+
+async def test_moving_through_sites_asks_once_the_cursor_stops(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Five quick site changes: your usage is worked out once, for the last site."""
+    from grid_tui.widgets.usage_bar import usage_bar as module
+
+    asked: list = []
+    real = module.my_usage
+
+    async def counting(client: Client, now: datetime, site: str | None = None, **kw):  # noqa: ANN202, ANN003
+        asked.append(site)
+        return await real(client, now, site, **kw)
+
+    monkeypatch.setattr(module, 'my_usage', counting)
+    client = counting_client([])
+
+    class QuickApp(App):
+        def compose(self) -> ComposeResult:
+            yield UsageBar(client, clock=lambda: THURSDAY_10)
+
+    app = QuickApp()
+    async with app.run_test(size=(120, 10)) as pilot:
+        await settle(app, pilot)
+        asked.clear()
+        usage_bar = app.query_one(UsageBar)
+        for site in ('nancy', 'lyon', 'nancy', 'lyon', 'nancy'):
+            usage_bar.show_site(site)
+        await pilot.pause(SETTLE_SECONDS + 0.2)
+        await settle(app, pilot)
+        assert asked == ['nancy']
+
+
+async def test_nothing_is_asked_while_the_app_is_in_the_background() -> None:
+    """With polling off, a tick only redraws; it loads again once polling is on."""
+    seen: list = []
+    client = counting_client(seen)
+
+    class AwayApp(App):
+        polling = False
+
+        def compose(self) -> ComposeResult:
+            yield UsageBar(client, clock=lambda: THURSDAY_10)
+
+    app = AwayApp()
+    async with app.run_test(size=(120, 10)) as pilot:
+        await settle(app, pilot)
+        usage_bar = app.query_one(UsageBar)
+        usage_bar._busy_at = usage_bar._mine_at = 0.0  # everything is old
+        before = len(seen)
+        usage_bar._tick()
+        await settle(app, pilot)
+        assert len(seen) == before
+        AwayApp.polling = True
+        usage_bar._tick()
+        await settle(app, pilot)
+        assert len(seen) > before
+
+
+async def test_the_app_stops_polling_in_the_background() -> None:
+    """Blur (terminal in the background) or an SSH session: no polling."""
+    app = Grid5KApp(g5k_client())
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        assert app.polling
+        app.on_app_blur()
+        assert not app.polling
+        app.on_app_focus()
+        app.away(True)
+        assert not app.polling
+        app.away(False)
+        assert app.polling

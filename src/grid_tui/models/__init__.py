@@ -21,6 +21,7 @@ from grid_tui.models.node import (
     Processor,
     StorageDevice,
 )
+from grid_tui.models.reservation import Reservation, Schedule
 from grid_tui.models.site import Site
 from grid_tui.models.usage import Usage
 
@@ -45,6 +46,8 @@ __all__ = [
     'PduPort',
     'Performance',
     'Processor',
+    'Reservation',
+    'Schedule',
     'Site',
     'StorageDevice',
     'Usage',

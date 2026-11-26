@@ -43,16 +43,22 @@ async def test_every_site_failing_raises() -> None:
         await client.usage()
 
 
-async def test_status_is_never_cached() -> None:
-    """Each call asks the API again: it changes every minute."""
+async def test_status_is_remembered_for_a_minute_only_in_memory() -> None:
+    """Asked twice within a minute: sent once; with refresh: sent again.
+
+    Nothing goes to the disk cache: it changes all the time.
+    """
     seen = []
+    cache = Cache(':memory:')
     client = StatusClient(
-        transport=fake_grid5000(SITES, statuses=STATUS, seen=seen),
-        cache=Cache(':memory:'),
+        transport=fake_grid5000(SITES, statuses=STATUS, seen=seen), cache=cache
     )
     await client.site_usage('nancy')
     await client.site_usage('nancy')
+    assert len(seen) == 1
+    await client.site_usage('nancy', refresh=True)
     assert len(seen) == 2
+    assert cache.get(client.base_url + '/sites/nancy/status') is None
 
 
 async def test_usage_of_one_site_asks_only_that_site() -> None:

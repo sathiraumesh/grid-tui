@@ -1,0 +1,160 @@
+/* Styles for the ReservationsPanel: three cards, like the Search tab */
+
+ReservationsPanel {
+    height: 1fr;
+    padding: 0 1;
+}
+
+/* ---- the cards ---------------------------------------------------- */
+
+ReservationsPanel #res-card,
+ReservationsPanel #timeline-card,
+ReservationsPanel #details-card {
+    border: round #45475a;
+    border-title-color: #a6adc8;
+    border-title-style: bold;
+    border-subtitle-color: #6c7086;
+}
+
+ReservationsPanel #res-card {
+    height: auto;                  /* three lines: no blank rows, the timeline */
+    padding: 0 2;                  /* gets the height */
+}
+
+ReservationsPanel #timeline-card {
+    height: 1fr;
+    padding: 0 1;
+}
+
+ReservationsPanel #details-card {
+    height: auto;
+    max-height: 5;
+    padding: 0 1;
+}
+
+/* the card you're working in lights up */
+ReservationsPanel #res-card:focus-within,
+ReservationsPanel #timeline-card:focus-within {
+    border: round #fab387;
+    border-title-color: #fab387;
+}
+
+/* ---- the controls: site, cluster, and the slot finder ------------- */
+
+ReservationsPanel #res-form {
+    grid-size: 6 1;
+    grid-columns: 5 1fr 8 1fr 5 27;  /* label, box, label, box, label, slot boxes */
+    grid-rows: 1;
+    grid-gutter: 0 2;
+    height: 1;
+}
+
+ReservationsPanel .form-label {
+    width: 100%;
+    color: #a6adc8;
+}
+
+ReservationsPanel #res-form Select {
+    width: 100%;
+}
+
+ReservationsPanel Select > SelectCurrent {
+    background: #313244;
+    padding: 0 1;
+}
+
+ReservationsPanel Select:focus > SelectCurrent {
+    background: #45475a;
+}
+
+ReservationsPanel Select > SelectCurrent .arrow {
+    color: #fab387;
+}
+
+ReservationsPanel Select > SelectOverlay {
+    border: round #fab387;
+    background: #313244;
+}
+
+ReservationsPanel .with-unit {
+    height: 1;
+}
+
+ReservationsPanel .with-unit Input {
+    width: 7;
+    background: #313244;
+    padding: 0 1;
+}
+
+ReservationsPanel .with-unit Input:focus {
+    background: #45475a;
+}
+
+ReservationsPanel Input > .input--placeholder {
+    color: #6c7086;
+}
+
+ReservationsPanel .unit {
+    width: auto;
+    padding: 0 1;
+    color: #6c7086;
+}
+
+/* ---- the cluster, zoom and legend; then the summary --------------- */
+
+ReservationsPanel #res-toolbar {
+    height: 1;
+}
+
+ReservationsPanel #res-title {
+    width: auto;
+    color: #a6adc8;
+    padding: 0 3 0 0;
+}
+
+ReservationsPanel #res-title.-chosen {
+    color: #fab387;                /* orange once a cluster is chosen */
+    text-style: bold;
+}
+
+ReservationsPanel #res-zoom {
+    width: auto;
+    color: #cdd6f4;
+}
+
+ReservationsPanel #res-summary {
+    height: 1;
+}
+
+/* ---- the timeline ------------------------------------------------- */
+
+ReservationsPanel #res-axis {
+    height: 4;                     /* now, days, hours, the policy band */
+}
+
+ReservationsPanel DataTable {
+    height: 1fr;
+    background: #1e1e2e;
+}
+
+ReservationsPanel DataTable > .datatable--cursor {
+    background: #313244;           /* soft, so the bars' colours still read */
+}
+
+ReservationsPanel DataTable > .datatable--even-row {
+    background: #1e1e2e;
+}
+
+ReservationsPanel #res-free {
+    height: 1;                     /* right under the rows: the now line runs on */
+}
+
+ReservationsPanel #res-slot {
+    height: 1;
+}
+
+/* ---- the details -------------------------------------------------- */
+
+ReservationsPanel #res-details {
+    height: auto;
+}

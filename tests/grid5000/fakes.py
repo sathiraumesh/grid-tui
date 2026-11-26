@@ -53,6 +53,66 @@ STATUS = {
         }
     },
 }
+# GET /sites/nancy/clusters/gros/status: reservations around SCHEDULE_NOW
+SCHEDULE_NOW = 1795726800  # Thursday 26 November 2026, 22:00 in Paris
+HOUR = 3600
+SCHEDULE = {
+    'uid': 'gros',
+    'nodes': {
+        'gros-1.nancy.grid5000.fr': {
+            'hard': 'alive',
+            'reservations': [
+                {
+                    'uid': 11,
+                    'user': 'alice',
+                    'queue': 'default',
+                    'state': 'running',
+                    'started_at': SCHEDULE_NOW - HOUR,
+                    'walltime': 3 * HOUR,
+                }
+            ],
+        },
+        'gros-2.nancy.grid5000.fr': {
+            'hard': 'alive',
+            'reservations': [
+                {
+                    'uid': 11,
+                    'user': 'alice',
+                    'queue': 'default',
+                    'state': 'running',
+                    'started_at': SCHEDULE_NOW - HOUR,
+                    'walltime': 3 * HOUR,
+                }
+            ],
+        },
+        'gros-3.nancy.grid5000.fr': {'hard': 'dead', 'reservations': []},
+        'gros-10.nancy.grid5000.fr': {
+            'hard': 'alive',
+            'reservations': [
+                {
+                    'uid': 22,
+                    'user': 'oar',
+                    'name': 'upgrade',
+                    'queue': 'admin',
+                    'state': 'waiting',
+                    'started_at': 0,
+                    'scheduled_at': SCHEDULE_NOW + 4 * HOUR,
+                    'walltime': 2 * HOUR,
+                },
+                {
+                    'uid': 33,
+                    'user': 'bob',
+                    'queue': 'default',
+                    'state': 'waiting',
+                    'started_at': 0,
+                    'scheduled_at': 0,  # not scheduled yet: no time to draw
+                    'walltime': HOUR,
+                },
+            ],
+        },
+        'gros-4.nancy.grid5000.fr': {'hard': 'alive', 'reservations': []},
+    },
+}
 NODES = {
     ('nancy', 'gros'): [
         {
@@ -108,6 +168,7 @@ def fake_grid5000(
     nodes: dict[tuple[str, str], list[dict]] | None = None,
     statuses: dict[str, dict] | None = None,
     jobs: dict[str, list[dict]] | None = None,
+    schedules: dict[tuple[str, str], dict] | None = None,
 ) -> httpx.MockTransport:
     """A fake transport that answers like Grid'5000, path by path:
 
@@ -119,6 +180,7 @@ def fake_grid5000(
     /sites/{site}/status                         → statuses[site]
     /sites/{site}/jobs                           → jobs[site] (the query is ignored)
     /sites/{site}/jobs/{uid}                     → that job
+    /sites/{site}/clusters/{cluster}/status      → schedules[(site, cluster)]
 
     Anything it doesn't know is a 404. Every answer has this status instead,
     if it isn't 200 (e.g. 401).
@@ -128,6 +190,7 @@ def fake_grid5000(
     nodes = nodes or {}
     statuses = statuses or {}
     jobs = jobs or {}
+    schedules = schedules or {}
 
     def handle(request: httpx.Request) -> httpx.Response:
         if seen is not None:
@@ -141,6 +204,11 @@ def fake_grid5000(
             if parts[2] not in clusters:
                 return httpx.Response(404, json={})
             return httpx.Response(200, json={'items': clusters[parts[2]]})
+        if len(parts) == 6 and parts[3] == 'clusters' and parts[5] == 'status':
+            found = schedules.get((parts[2], parts[4]))
+            if found is None:
+                return httpx.Response(404, json={})
+            return httpx.Response(200, json=found)
         if len(parts) in (4, 5) and parts[1] == 'sites' and parts[3] == 'jobs':
             if parts[2] not in jobs:
                 return httpx.Response(404, json={})
