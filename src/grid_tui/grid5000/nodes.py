@@ -20,23 +20,29 @@ def nodes_path(site: str, cluster: str) -> str:
 class NodesClient(BaseClient):
     """The calls about nodes."""
 
-    async def list(self, site: str, cluster: str) -> list[Node]:
-        """Every node of a cluster, with its hardware.
+    async def list(
+        self, site: str, cluster: str, *, refresh: bool = False
+    ) -> list[Node]:
+        """Every node of a cluster, with its hardware. Cached.
 
         Args:
             site: The site's uid, e.g. 'nancy'.
             cluster: The cluster's uid, e.g. 'gros'.
+            refresh: Ask the API again instead of using the cache.
         """
-        data = await self._get(nodes_path(site, cluster))
+        data = await self._get(nodes_path(site, cluster), cached=True, refresh=refresh)
         return [Node.model_validate(item) for item in data.get('items', [])]
 
-    async def get(self, site: str, cluster: str, node: str) -> Node:
-        """One node, with its hardware.
+    async def get(
+        self, site: str, cluster: str, node: str, *, refresh: bool = False
+    ) -> Node:
+        """One node, with its hardware. Cached.
 
         Args:
             site: The site's uid, e.g. 'nancy'.
             cluster: The cluster's uid, e.g. 'gros'.
             node: The node's uid, e.g. 'gros-12'.
+            refresh: Ask the API again instead of using the cache.
         """
         path = f'{nodes_path(site, cluster)}/{quote(node, safe="")}'
-        return Node.model_validate(await self._get(path))
+        return Node.model_validate(await self._get(path, cached=True, refresh=refresh))

@@ -22,18 +22,40 @@ class SitesClient(BaseClient):
         data = await self._get('/sites', cached=True, refresh=refresh)
         return [Site.model_validate(item) for item in data.get('items', [])]
 
-    async def list_clusters(self, site: str) -> list[Cluster]:
-        """The clusters of one site, e.g. await list_clusters('nancy')."""
-        data = await self._get(f'/sites/{quote(site, safe="")}/clusters')
+    async def list_clusters(self, site: str, *, refresh: bool = False) -> list[Cluster]:
+        """The clusters of one site, e.g. await list_clusters('nancy'). Cached.
+
+        Args:
+            site: The site's uid, e.g. 'nancy'.
+            refresh: Ask the API again instead of using the cache.
+        """
+        path = f'/sites/{quote(site, safe="")}/clusters'
+        data = await self._get(path, cached=True, refresh=refresh)
         return [Cluster.model_validate(item) for item in data.get('items', [])]
 
-    async def get_cluster(self, site: str, cluster: str) -> Cluster:
-        """One cluster of a site, e.g. await get_cluster('nancy', 'gros')."""
-        path = f'/sites/{quote(site, safe="")}/clusters/{quote(cluster, safe="")}'
-        return Cluster.model_validate(await self._get(path))
+    async def get_cluster(
+        self, site: str, cluster: str, *, refresh: bool = False
+    ) -> Cluster:
+        """One cluster of a site, e.g. await get_cluster('nancy', 'gros'). Cached.
 
-    async def all_clusters(self) -> dict[str, list[Cluster]]:
-        """The clusters of every site, by site: {'nancy': [...], 'lyon': [...]}."""
-        sites = await self.list()
-        answers = await asyncio.gather(*(self.list_clusters(s.uid) for s in sites))
+        Args:
+            site: The site's uid, e.g. 'nancy'.
+            cluster: The cluster's uid, e.g. 'gros'.
+            refresh: Ask the API again instead of using the cache.
+        """
+        path = f'/sites/{quote(site, safe="")}/clusters/{quote(cluster, safe="")}'
+        return Cluster.model_validate(
+            await self._get(path, cached=True, refresh=refresh)
+        )
+
+    async def all_clusters(self, *, refresh: bool = False) -> dict[str, list[Cluster]]:
+        """The clusters of every site, by site: {'nancy': [...], 'lyon': [...]}.
+
+        Args:
+            refresh: Ask the API again for the sites and every site's clusters.
+        """
+        sites = await self.list(refresh=refresh)
+        answers = await asyncio.gather(
+            *(self.list_clusters(s.uid, refresh=refresh) for s in sites)
+        )
         return {site.uid: clusters for site, clusters in zip(sites, answers)}

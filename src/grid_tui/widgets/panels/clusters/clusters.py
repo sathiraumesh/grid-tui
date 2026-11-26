@@ -104,14 +104,20 @@ class ClusterPanel(Widget):
         self._select_site(self.site)  # a site may have been chosen meanwhile
 
     @work(exclusive=True)  # runs in the background; a new load cancels the old one
-    async def load(self) -> None:
-        """Fetch the clusters from the API and show them."""
+    async def load(self, refresh: bool = False) -> None:
+        """Fetch the clusters and show them: from the cache, once they're saved.
+
+        Args:
+            refresh: Ask the API again instead of using the cache (the r key).
+        """
         self.loading = True  # shows a spinner over the panel
+        sites = self.client.sites
         try:
             if self.site:
-                by_site = {self.site: await self.client.sites.list_clusters(self.site)}
+                clusters = await sites.list_clusters(self.site, refresh=refresh)
+                by_site = {self.site: clusters}
             else:
-                by_site = await self.client.sites.all_clusters()
+                by_site = await sites.all_clusters(refresh=refresh)
         except (ApiError, httpx.HTTPError) as error:
             self.notify(str(error), title="Couldn't load clusters", severity='error')
             return

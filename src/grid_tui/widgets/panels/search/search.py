@@ -97,6 +97,7 @@ class SearchPanel(Widget):
         self.client = client
         self.found: Found | None = None  # every cluster's nodes, once loaded
         self._load_task: asyncio.Task | None = None  # the loading, while it runs
+        self._refresh = False  # should the next loading skip the cache (the r key)
         self.matches: list[Match] = []
         self.searched = False  # has a search been run
 
@@ -161,7 +162,8 @@ class SearchPanel(Widget):
         if self.found is not None:
             return self.found
         if self._load_task is None:
-            self._load_task = asyncio.ensure_future(self._load_everything())
+            refresh, self._refresh = self._refresh, False  # only this once
+            self._load_task = asyncio.ensure_future(self._load_everything(refresh))
         task = self._load_task
         try:
             found = await asyncio.shield(task)
@@ -221,10 +223,15 @@ class SearchPanel(Widget):
         """Search was pressed, or Enter in a box: run the search."""
         self.run_search()
 
-    def load(self) -> None:
-        """Forget what was loaded; search again if a search was run (the r key)."""
+    def load(self, refresh: bool = False) -> None:
+        """Forget what was loaded; search again if a search was run (the r key).
+
+        Args:
+            refresh: Load from the API again instead of the cache.
+        """
         self.found = None
         self._load_task = None
+        self._refresh = refresh
         if self.searched:
             self.run_search()
         elif self.is_on_screen:
@@ -249,16 +256,22 @@ class SearchPanel(Widget):
                 self.loading = False
         self.show(search(self.found, self.requirements()))
 
-    async def _load_everything(self) -> Found:
+    async def _load_everything(self, refresh: bool = False) -> Found:
         """Every cluster of every site, and its nodes, at the same time.
 
         A cluster whose nodes can't be loaded is left out, and a warning says
         how many were; if the clusters themselves can't be loaded, it raises.
+
+        Args:
+            refresh: Ask the API again instead of using the cache.
         """
-        by_site = await self.client.sites.all_clusters()
+        by_site = await self.client.sites.all_clusters(refresh=refresh)
         clusters = [(site, c) for site, cs in by_site.items() for c in cs]
         answers = await asyncio.gather(
-            *(self.client.nodes.list(site, c.uid) for site, c in clusters),
+            *(
+                self.client.nodes.list(site, c.uid, refresh=refresh)
+                for site, c in clusters
+            ),
             return_exceptions=True,
         )
         found: Found = {}

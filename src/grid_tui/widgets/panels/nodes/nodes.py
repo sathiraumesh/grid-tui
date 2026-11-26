@@ -123,8 +123,12 @@ class NodesPanel(Widget):
             title.remove_class('-chosen')
 
     @work(exclusive=True)  # runs in the background; a new load cancels the old one
-    async def load(self) -> None:
-        """Fetch the cluster's nodes from the API and show them."""
+    async def load(self, refresh: bool = False) -> None:
+        """Fetch the cluster's nodes and show them: from the cache, once saved.
+
+        Args:
+            refresh: Ask the API again instead of using the cache (the r key).
+        """
         self._show_title()
         if not (self.site and self.cluster):
             self.show([])
@@ -134,8 +138,8 @@ class NodesPanel(Widget):
         try:
             # the nodes, and the cluster (for its metrics), at the same time
             nodes, cluster = await asyncio.gather(
-                self.client.nodes.list(self.site, self.cluster),
-                self._cluster_or_none(self.site, self.cluster),
+                self.client.nodes.list(self.site, self.cluster, refresh=refresh),
+                self._cluster_or_none(self.site, self.cluster, refresh=refresh),
             )
         except (ApiError, httpx.HTTPError) as error:
             self.notify(str(error), title="Couldn't load nodes", severity='error')
@@ -146,10 +150,12 @@ class NodesPanel(Widget):
         self.cluster_info = cluster
         self.show(nodes)
 
-    async def _cluster_or_none(self, site: str, cluster: str) -> Cluster | None:
+    async def _cluster_or_none(
+        self, site: str, cluster: str, *, refresh: bool = False
+    ) -> Cluster | None:
         """The cluster, or None if it can't be loaded: the nodes still show."""
         try:
-            return await self.client.sites.get_cluster(site, cluster)
+            return await self.client.sites.get_cluster(site, cluster, refresh=refresh)
         except (ApiError, httpx.HTTPError):
             return None
 

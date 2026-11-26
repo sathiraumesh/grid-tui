@@ -1,5 +1,7 @@
 """Tests for the whole app: its frame, its keys, and how the tabs work together."""
 
+import pytest
+from textual.pilot import Pilot
 from textual.widgets import DataTable, Select
 
 from grid_tui.app import Grid5KApp
@@ -106,28 +108,64 @@ async def test_r_reloads_only_the_tab_that_is_showing() -> None:
         assert sites.row_count == 0  # not reloaded
 
 
-async def test_r_asks_the_api_again_not_the_cache() -> None:
-    """With a cache, sites load from it after the first time, but r asks the API."""
-    seen = []
+def cached_app() -> tuple[Grid5KApp, list]:
+    """The app on the fake API, with a cache, and the list of requests it sends."""
+    seen: list = []
     client = Client(
         transport=fake_grid5000(SITES, CLUSTERS, nodes=NODES, seen=seen),
         cache=Cache(':memory:'),
     )
-    app = Grid5KApp(client)
+    return Grid5KApp(client), seen
 
-    def asked() -> int:
-        """How many times /sites was asked of the API."""
-        return sum(request.url.path == '/stable/sites' for request in seen)
 
+async def open_tab(app: Grid5KApp, pilot: Pilot, tab: str) -> None:
+    """Show a tab with something loaded in it: Nodes on nancy/gros, a search."""
+    app.query_one(MainTabs).show(tab)
+    if tab == 'nodes':
+        app.query_one(NodesPanel).show_cluster('nancy', 'gros')
+    elif tab == 'search':
+        app.query_one(SearchPanel).run_search()
+    await settle(app, pilot)
+
+
+PANELS = {
+    'sites': SitesPanel,
+    'clusters': ClusterPanel,
+    'nodes': NodesPanel,
+    'search': SearchPanel,
+}
+
+
+@pytest.mark.parametrize('tab', list(PANELS))
+async def test_a_tab_loads_from_the_cache_but_r_asks_the_api(tab: str) -> None:
+    """Loading a tab again uses the cache (no request); r asks the API again."""
+    app, seen = cached_app()
     async with app.run_test() as pilot:
         await settle(app, pilot)
-        before = asked()
-        app.query_one(SitesPanel).load()
+        await open_tab(app, pilot, tab)
+        before = len(seen)
+
+        app.query_one(PANELS[tab]).load()
         await settle(app, pilot)
-        assert asked() == before  # from the cache
+        assert len(seen) == before  # every answer came from the cache
+
         await pilot.press('r')
         await settle(app, pilot)
-        assert asked() == before + 1  # from the API
+        assert len(seen) > before  # asked the API again
+
+
+async def test_node_details_use_the_cached_nodes_and_cluster() -> None:
+    """Opening the same cluster again, for its nodes and their details, asks nothing."""
+    app, seen = cached_app()
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await open_tab(app, pilot, 'nodes')
+        before = len(seen)
+        panel = app.query_one(NodesPanel)
+        panel.show_cluster('nancy', 'gros')
+        await settle(app, pilot)
+        assert len(seen) == before
+        assert panel.cluster_info is not None  # the details' metrics, from the cache
 
 
 # Choosing a cluster opens its nodes
