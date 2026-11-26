@@ -17,6 +17,18 @@ grid-tui                         # or: python -m grid_tui
 textual run --dev src/grid_tui/app.py   # with live CSS reload; `textual console` in another terminal for logs
 ```
 
+Outside Grid'5000 the API needs your login. Set `G5K_USER` / `G5K_PASSWORD` in
+the environment, or put them base64-encoded in `~/.grid-secret/`, one file per
+variable:
+
+```sh
+make secret                      # asks for the user and password and writes them; or by hand:
+mkdir -p ~/.grid-secret && chmod 700 ~/.grid-secret
+printf '%s' 'alice'    | base64 > ~/.grid-secret/G5K_USER
+printf '%s' 'p4ssw0rd' | base64 > ~/.grid-secret/G5K_PASSWORD
+chmod 600 ~/.grid-secret/*
+```
+
 ## Test
 
 ```sh

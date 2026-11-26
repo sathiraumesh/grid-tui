@@ -5,24 +5,76 @@ HTTP basic auth with your Grid'5000 login, read from the environment:
 
     G5K_USER, G5K_PASSWORD   your Grid'5000 login
     G5K_API                  the API root (default: DEFAULT_BASE_URL)
+
+Any of these not set in the environment is read from a secret folder instead,
+one file per variable holding its value base64-encoded:
+
+    ~/.grid-secret/G5K_USER        e.g. made with: printf alice | base64
+    ~/.grid-secret/G5K_PASSWORD
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 DEFAULT_BASE_URL = 'https://api.grid5000.fr/stable'
+SECRET_DIR_NAME = '.grid-secret'
+SETTING_NAMES = ('G5K_API', 'G5K_USER', 'G5K_PASSWORD')
 
 
-def settings_from_env() -> dict[str, str]:
-    """The API address and login, from G5K_API, G5K_USER and G5K_PASSWORD."""
+def find_secret_dir() -> Path:
+    """The secret folder: ~/.grid-secret in your home folder."""
+    return Path.home() / SECRET_DIR_NAME
+
+
+def read_secrets(folder: Path | None) -> dict[str, str]:
+    """The settings found in folder, each file's base64 contents decoded.
+
+    Args:
+        folder: The secret folder; None (or a missing folder) gives {}.
+
+    Raises:
+        ValueError: A file there is not valid base64 (or not UTF-8 inside).
+    """
+    secrets = {}
+    if folder is None or not folder.is_dir():
+        return secrets
+    for name in SETTING_NAMES:
+        path = folder / name
+        if not path.is_file():
+            continue
+        try:
+            raw = base64.b64decode(path.read_text().strip(), validate=True)
+            secrets[name] = raw.decode('utf-8').strip()
+        except (binascii.Error, UnicodeDecodeError) as error:
+            raise ValueError(f'{path}: not valid base64 ({error})') from error
+    return secrets
+
+
+def settings_from_env(secret_dir: Path | None = None) -> dict[str, str]:
+    """The API address and login, from G5K_API, G5K_USER and G5K_PASSWORD.
+
+    Each is taken from the environment if set there, else from the secret
+    folder (~/.grid-secret), else left at its default.
+
+    Args:
+        secret_dir: The secret folder to read; None means ~/.grid-secret.
+    """
+    secrets = read_secrets(secret_dir or find_secret_dir())
+
+    def get(name: str) -> str:
+        return os.environ.get(name) or secrets.get(name, '')
+
     return {
-        'base_url': os.environ.get('G5K_API') or DEFAULT_BASE_URL,
-        'user': os.environ.get('G5K_USER', ''),
-        'password': os.environ.get('G5K_PASSWORD', ''),
+        'base_url': get('G5K_API') or DEFAULT_BASE_URL,
+        'user': get('G5K_USER'),
+        'password': get('G5K_PASSWORD'),
     }
 
 
@@ -40,7 +92,10 @@ class ApiError(Exception):
         self.status = status
         message = f'GET {path}: {status} {httpx.codes.get_reason_phrase(status)}'
         if status == 401:
-            message += " (outside Grid'5000, set G5K_USER and G5K_PASSWORD)"
+            message += (
+                " (outside Grid'5000, set G5K_USER and G5K_PASSWORD"
+                f' or put them in ~/{SECRET_DIR_NAME}/)'
+            )
         super().__init__(message)
 
 

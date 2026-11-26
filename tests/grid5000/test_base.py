@@ -54,3 +54,52 @@ def test_from_env(monkeypatch):
     assert client.base_url == 'https://api.example/stable'
     assert client.user == 'alice'
     assert client.password == 'secret'
+
+
+def _write_secret(folder, name, value):
+    """Put value, base64-encoded, in folder/name."""
+    import base64
+
+    (folder / name).write_text(base64.b64encode(value.encode()).decode() + '\n')
+
+
+def test_settings_from_the_secret_folder(tmp_path, monkeypatch):
+    """With nothing in the environment, the login comes from the secret folder."""
+    from grid_tui.grid5000.base import settings_from_env
+
+    for name in ('G5K_API', 'G5K_USER', 'G5K_PASSWORD'):
+        monkeypatch.delenv(name, raising=False)
+    _write_secret(tmp_path, 'G5K_USER', 'alice')
+    _write_secret(tmp_path, 'G5K_PASSWORD', 's3cret')
+    settings = settings_from_env(tmp_path)
+    assert settings['user'] == 'alice'
+    assert settings['password'] == 's3cret'
+    assert settings['base_url'] == 'https://api.grid5000.fr/stable'
+
+
+def test_environment_wins_over_the_secret_folder(tmp_path, monkeypatch):
+    """A variable set in the environment is used before the secret folder's."""
+    from grid_tui.grid5000.base import settings_from_env
+
+    monkeypatch.setenv('G5K_USER', 'bob')
+    _write_secret(tmp_path, 'G5K_USER', 'alice')
+    assert settings_from_env(tmp_path)['user'] == 'bob'
+
+
+def test_secret_folder_is_in_the_home_folder(tmp_path, monkeypatch):
+    """With no folder given, the secret folder is ~/.grid-secret."""
+    monkeypatch.delenv('G5K_USER', raising=False)
+    monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+    (tmp_path / '.grid-secret').mkdir()
+    _write_secret(tmp_path / '.grid-secret', 'G5K_USER', 'alice')
+    assert BaseClient.from_env().user == 'alice'
+
+
+def test_bad_base64_in_the_secret_folder(tmp_path, monkeypatch):
+    """A file that is not base64 says which one it is."""
+    from grid_tui.grid5000.base import settings_from_env
+
+    monkeypatch.delenv('G5K_USER', raising=False)
+    (tmp_path / 'G5K_USER').write_text('not base64!!')
+    with pytest.raises(ValueError, match='G5K_USER'):
+        settings_from_env(tmp_path)
