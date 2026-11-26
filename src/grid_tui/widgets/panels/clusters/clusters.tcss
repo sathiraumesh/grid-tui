@@ -54,3 +54,20 @@ ClusterPanel #site-select > SelectOverlay {
     border: round #fab387;
     background: #313244;
 }
+
+/* The SSH button, just after the dropdown */
+
+ClusterPanel #ssh-button {
+    min-width: 8;
+    margin-left: 2;
+    padding: 0 1;
+    background: #313244;
+    color: #a6e3a1;                /* green: it opens something live */
+    text-style: bold;
+}
+
+ClusterPanel #ssh-button:hover,
+ClusterPanel #ssh-button:focus {
+    background: #45475a;
+    text-style: bold;
+}

@@ -70,5 +70,6 @@ src/grid_tui/
     popups/             screens that open over the app: node_details
     thin_scrollbar/     a slimmer scrollbar
     usage_bar/          the top-right line: policy period, your usage, how busy
+  utils/                helpers: ssh (open a shell on a site's frontend)
 tests/                  the same folders as src/grid_tui
 ```

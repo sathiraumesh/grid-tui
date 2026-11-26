@@ -5,20 +5,23 @@ from typing import Any
 
 import httpx
 from textual import on, work
-from textual.app import ComposeResult
+from textual.app import ComposeResult, SuspendNotSupported
+from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import DataTable, Label, Select
+from textual.widgets import Button, DataTable, Label, Select
 
 from grid_tui.grid5000 import ApiError, Client
 from grid_tui.models import Cluster
+from grid_tui.utils import ssh
 
 
 class ClusterPanel(Widget):
     """A table of clusters, loaded from the API: every site's, or one site's."""
 
     DEFAULT_CSS = (Path(__file__).parent / 'clusters.tcss').read_text()
+    BINDINGS = [Binding('s', 'ssh', 'SSH to site')]
 
     class Chosen(Message):
         """Sent when a cluster is chosen in the table (Enter, or a click)."""
@@ -49,12 +52,13 @@ class ClusterPanel(Widget):
         self._dropdown_sites: set[str] = set()  # the sites the dropdown has
 
     def compose(self) -> ComposeResult:
-        """The panel's widgets: a site dropdown on the right, then the table."""
+        """The panel's widgets: a site dropdown and the SSH button, then the table."""
         with Horizontal(id='toolbar'):
             yield Label('Site', id='site-label')
             yield Select(
                 [], prompt='All sites', allow_blank=True, compact=True, id='site-select'
             )
+            yield Button('SSH ›', compact=True, id='ssh-button')
         yield DataTable(cursor_type='row', zebra_stripes=True)
 
     def on_mount(self) -> None:
@@ -73,6 +77,7 @@ class ClusterPanel(Widget):
         """
         self.site = site
         self._select_site(site)
+        self._update_ssh_label()
         self.load()
 
     def _select_site(self, site: str | None) -> None:
@@ -89,6 +94,7 @@ class ClusterPanel(Widget):
         site = event.select.selection  # None for 'All sites'
         if site != self.site:
             self.site = site
+            self._update_ssh_label()
             self.load()
 
     @work(group='sites')
@@ -140,6 +146,61 @@ class ClusterPanel(Widget):
                     'yes' if cluster.kavlan else '',
                     key=f'{site}/{cluster.uid}',
                 )
+        self._update_ssh_label()
+
+    def ssh_site(self) -> str | None:
+        """The site the SSH button connects to: the dropdown's, else the cursor's.
+
+        With 'All sites' in the dropdown, it is the highlighted cluster's site;
+        None if there are no clusters yet.
+        """
+        if self.site:
+            return self.site
+        table = self.query_one(DataTable)
+        if not table.row_count:
+            return None
+        key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+        return key.split('/', 1)[0]  # the key is 'site/cluster'
+
+    @on(DataTable.RowHighlighted)
+    def _update_ssh_label(self) -> None:
+        """Name the site the SSH button connects to: 'SSH nancy ›'."""
+        site = self.ssh_site()
+        self.query_one('#ssh-button', Button).label = (
+            f'SSH {site} ›' if site else 'SSH ›'
+        )
+
+    @on(Button.Pressed, '#ssh-button')
+    def action_ssh(self) -> None:
+        """Open a shell on the site's frontend (the s key, or the SSH button).
+
+        The app steps aside while the session runs, and comes back when you
+        leave it (exit, or Ctrl-D).
+        """
+        site = self.ssh_site()
+        if site is None:
+            return
+        if not ssh.ssh_available():
+            self.notify('Install OpenSSH to connect.', title='No ssh', severity='error')
+            return
+        command = ssh.ssh_command(site, self.client.sites.user)
+        try:
+            with self.app.suspend():
+                code = ssh.run(command)
+        except SuspendNotSupported:
+            self.notify(
+                'Run the app in a terminal to connect: ' + ' '.join(command),
+                title="Can't open SSH here",
+                severity='warning',
+            )
+            return
+        if code == ssh.SSH_FAILED:
+            self.notify(
+                "Check that your SSH key is added to your Grid'5000 account.",
+                title=f"Couldn't connect to {site}",
+                severity='error',
+            )
+        self.query_one(DataTable).focus()
 
     @on(DataTable.RowSelected)
     def _cluster_chosen(self, event: DataTable.RowSelected) -> None:
