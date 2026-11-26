@@ -12,7 +12,7 @@ from typing import Any, TypeVar
 import httpx
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Grid, Horizontal, Vertical
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button, Checkbox, DataTable, Input, Label, Select
@@ -102,38 +102,57 @@ class SearchPanel(Widget):
         self.searched = False  # has a search been run
 
     def compose(self) -> ComposeResult:
-        """The form on two short lines, a status line, then the results."""
-        with Horizontal(id='search-form', classes='form-row'):
-            yield Label('Cores ≥', classes='form-label')
-            yield Input(placeholder='0', type='integer', compact=True, id='min-cores')
-            yield Label('RAM ≥', classes='form-label')
-            yield Input(placeholder='0', type='number', compact=True, id='min-ram')
-            yield Label('GiB', classes='form-label')
-            yield Checkbox('Wattmeter', id='need-wattmeter')
-            yield Button('Search', compact=True, id='search-button')
-        with Horizontal(id='search-where', classes='form-row'):
-            yield Label('GPU', classes='form-label')
-            yield Select(
-                [('Any GPU', ANY_GPU)],
-                prompt='No need',
-                allow_blank=True,
-                compact=True,
-                id='need-gpu',
-            )
-            yield Label('Disk', classes='form-label')
-            yield Select(
-                [(kind, kind) for kind in DISK_TYPES],
-                prompt='Any',
-                allow_blank=True,
-                compact=True,
-                id='need-disk',
-            )
-            yield Label('Site', classes='form-label')
-            yield Select(
-                [], prompt='All sites', allow_blank=True, compact=True, id='search-site'
-            )
-        yield Label(HINT, id='search-status')
-        yield DataTable(cursor_type='row', zebra_stripes=True)
+        """A card with the form, then a card with the status line and results.
+
+        The form is a grid, so the labels and boxes line up in columns:
+
+            Min cores  [    ]       Min RAM  [    ] GiB   [X] Wattmeter
+            GPU        [No need ▼]  Disk     [Any  ▼]     Site   [All sites ▼]
+        """
+        with Vertical(id='search-card') as card:
+            card.border_title = 'Find clusters'
+            with Grid(id='search-form'):
+                yield Label('Min cores', classes='form-label')
+                yield Input(
+                    placeholder='any', type='integer', compact=True, id='min-cores'
+                )
+                yield Label('Min RAM', classes='form-label')
+                with Horizontal(classes='with-unit'):
+                    yield Input(
+                        placeholder='any', type='number', compact=True, id='min-ram'
+                    )
+                    yield Label('GiB', classes='unit')
+                yield Checkbox('Wattmeter', id='need-wattmeter')  # spans 2 cells
+                yield Label('GPU', classes='form-label')
+                yield Select(
+                    [('Any GPU', ANY_GPU)],
+                    prompt='No need',
+                    allow_blank=True,
+                    compact=True,
+                    id='need-gpu',
+                )
+                yield Label('Disk', classes='form-label')
+                yield Select(
+                    [(kind, kind) for kind in DISK_TYPES],
+                    prompt='Any',
+                    allow_blank=True,
+                    compact=True,
+                    id='need-disk',
+                )
+                yield Label('Site', classes='form-label')
+                yield Select(
+                    [],
+                    prompt='All sites',
+                    allow_blank=True,
+                    compact=True,
+                    id='search-site',
+                )
+            with Horizontal(id='search-actions'):
+                yield Label(HINT, id='search-status')
+                yield Button('Search', compact=True, id='search-button')
+        with Vertical(id='results-card') as card:
+            card.border_title = 'Results'
+            yield DataTable(cursor_type='row', zebra_stripes=True)
 
     def on_mount(self) -> None:
         """Add the columns, and fill the site list."""

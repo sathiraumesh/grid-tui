@@ -1,37 +1,88 @@
-/* Styles for the SearchPanel */
+/* Styles for the SearchPanel: a form card above a results card */
 
 SearchPanel {
     height: 1fr;
+    padding: 1 1 0 1;
 }
 
-SearchPanel .form-row {
-    height: 1;
+/* ---- the cards ---------------------------------------------------- */
+
+SearchPanel #search-card,
+SearchPanel #results-card {
+    border: round #45475a;
+    border-title-color: #a6adc8;
+    border-title-style: bold;
 }
 
-SearchPanel #search-where {
+SearchPanel #search-card {
+    height: auto;
+    padding: 1 2 0 2;
     margin-bottom: 1;
 }
 
-SearchPanel .form-row > * {
-    margin-right: 2;
+SearchPanel #results-card {
+    height: 1fr;
+    padding: 0 1;
+}
+
+/* the card you're working in lights up */
+SearchPanel #search-card:focus-within,
+SearchPanel #results-card:focus-within {
+    border: round #fab387;
+    border-title-color: #fab387;
+}
+
+/* ---- the form: three label + box pairs on each of two rows -------- */
+
+SearchPanel #search-form {
+    grid-size: 6 2;
+    grid-columns: 11 1fr 9 1fr 7 1fr;  /* label, box, label, box, label, box */
+    grid-rows: 1;
+    grid-gutter: 1 2;               /* a blank row between the rows */
+    height: auto;
 }
 
 SearchPanel .form-label {
-    width: auto;
-    padding: 0 1 0 0;
+    width: 100%;
     color: #a6adc8;
 }
 
+SearchPanel #search-form Input,
+SearchPanel #search-form Select {
+    width: 100%;
+}
+
+SearchPanel .with-unit {
+    height: 1;
+}
+
+SearchPanel #search-form .with-unit Input {
+    width: 1fr;                    /* the box, then 'GiB' after it */
+}
+
+SearchPanel .unit {
+    width: auto;
+    padding: 0 0 0 1;
+    color: #6c7086;
+}
+
 SearchPanel Input {
-    width: 8;
     background: #313244;
+    padding: 0 1;
 }
 
 SearchPanel Input:focus {
     background: #45475a;
 }
 
+SearchPanel Input > .input--placeholder {
+    color: #6c7086;
+}
+
+/* ---- the wattmeter checkbox --------------------------------------- */
+
 SearchPanel Checkbox {
+    column-span: 2;                /* where a label and a box would be */
     width: auto;
     height: 1;
     border: none;
@@ -47,19 +98,20 @@ SearchPanel Checkbox:hover {
 }
 
 SearchPanel Checkbox > .toggle--button {
-    color: #313244;                /* not ticked: an empty dark box */
-    background: #313244;
+    color: #45475a;                /* not ticked: an empty grey box you can see */
+    background: #45475a;
 }
 
 SearchPanel Checkbox.-on > .toggle--button {
     color: #fab387;                /* ticked: an orange X */
-    background: #313244;
+    background: #45475a;
     text-style: bold;
 }
 
 SearchPanel Checkbox > .toggle--label {
     color: #cdd6f4;
     background: transparent;
+    padding: 0 0 0 1;
 }
 
 SearchPanel Checkbox:focus > .toggle--label {
@@ -68,19 +120,7 @@ SearchPanel Checkbox:focus > .toggle--label {
     text-style: bold;
 }
 
-/* the dropdowns: GPU, disk and site */
-
-SearchPanel #need-gpu {
-    width: 22;
-}
-
-SearchPanel #need-disk {
-    width: 10;
-}
-
-SearchPanel #search-site {
-    width: 16;
-}
+/* ---- the dropdowns: GPU, disk and site ---------------------------- */
 
 SearchPanel Select > SelectCurrent {
     background: #313244;
@@ -100,18 +140,33 @@ SearchPanel Select > SelectOverlay {
     background: #313244;
 }
 
+/* ---- the status line and the Search button, under the form -------- */
+
+SearchPanel #search-actions {
+    height: 3;
+    padding: 1 0;                  /* a blank row above and below */
+}
+
+SearchPanel #search-status {
+    width: 1fr;
+    color: #a6adc8;
+    text-style: italic;
+}
+
 SearchPanel #search-button {
-    min-width: 10;
+    min-width: 12;
     background: #fab387;
     color: #1e1e2e;
     text-style: bold;
 }
 
-SearchPanel #search-status {
-    height: 1;
-    margin-bottom: 1;
-    color: #a6adc8;
+SearchPanel #search-button:hover,
+SearchPanel #search-button:focus {
+    background: #f9c7a3;
+    text-style: bold;
 }
+
+/* ---- the results -------------------------------------------------- */
 
 SearchPanel DataTable {
     height: 1fr;
@@ -126,4 +181,8 @@ SearchPanel DataTable > .datatable--header {
 
 SearchPanel DataTable > .datatable--cursor {
     background: #45475a;
+}
+
+SearchPanel DataTable > .datatable--even-row {
+    background: #232336;
 }
