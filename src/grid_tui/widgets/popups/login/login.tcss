@@ -146,6 +146,19 @@ LoginScreen #forgot:hover, LoginScreen #forgot:focus {
     background: #45475a;
 }
 
+/* Quit: on the left, quiet, red when you point at it */
+SignUpScreen .buttons #quit, LoginScreen .buttons #quit {
+    margin-left: 0;
+    margin-right: 1;
+    color: #a6adc8;
+}
+
+SignUpScreen #quit:hover, SignUpScreen #quit:focus,
+LoginScreen #quit:hover, LoginScreen #quit:focus {
+    background: #45475a;
+    color: #f38ba8;
+}
+
 /* ---- the note under the card --------------------------------------------- */
 
 SignUpScreen .note, LoginScreen .note {

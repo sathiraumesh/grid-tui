@@ -63,6 +63,11 @@ def pin_dots(typed: int) -> Text:
     return text
 
 
+async def quit_app(screen: Screen) -> None:
+    """Close the app (the Quit button)."""
+    await screen.app.action_quit()
+
+
 def say_on(screen: Screen, text: str, error: bool) -> None:
     """Put a line under a card's boxes: ✗ and red for what's wrong, else grey."""
     message = screen.query_one('#message', Static)
@@ -134,9 +139,7 @@ class SignUpScreen(Screen[Credentials]):
                 card.border_title = (
                     'Sign up' if not self.vault.exists() else 'Sign up again'
                 )
-                card.border_subtitle = (
-                    'Esc: back · Ctrl+Q: quit' if self.can_go_back else 'Ctrl+Q: quit'
-                )
+                card.border_subtitle = 'Esc: back' if self.can_go_back else ''
                 yield Static(
                     "Your Grid'5000 login, and a PIN to unlock it next time.",
                     classes='intro',
@@ -161,6 +164,7 @@ class SignUpScreen(Screen[Credentials]):
                         yield Static('', classes='dots', id='pin-match')
                 yield Static('', classes='message', id='message')
                 with Horizontal(classes='buttons'):
+                    yield Button('Quit', compact=True, id='quit')
                     yield Button('Sign up  ›', compact=True, id='sign-up')
             yield Static(
                 '◆ Kept on this computer only, encrypted with your PIN.',
@@ -189,6 +193,11 @@ class SignUpScreen(Screen[Credentials]):
     def say(self, text: str, error: bool = True) -> None:
         """Put a line under the boxes: what's wrong (red), or what's going on."""
         say_on(self, text, error)
+
+    @on(Button.Pressed, '#quit')
+    async def _quit(self) -> None:
+        """Quit (the Quit button): nothing is saved."""
+        await quit_app(self)
 
     def filled_in(self) -> tuple[Credentials, str]:
         """The login and the PIN, as typed.
@@ -276,7 +285,6 @@ class LoginScreen(Screen[Credentials]):
             yield from banner()
             with Vertical(classes='card') as card:
                 card.border_title = 'Welcome back'
-                card.border_subtitle = 'q: quit'
                 yield Static(
                     f'Type your {PIN_LENGTH}-digit PIN to unlock.', classes='intro'
                 )
@@ -285,6 +293,7 @@ class LoginScreen(Screen[Credentials]):
                     yield pin_box('pin', '', q_quits=True)  # q quits there too
                 yield Static('', classes='message', id='message')
                 with Horizontal(classes='buttons'):
+                    yield Button('Quit', compact=True, id='quit')
                     yield Button('Forgot PIN?', compact=True, id='forgot')
                     yield Button('Unlock  ›', compact=True, id='log-in')
             yield Static(
@@ -304,6 +313,11 @@ class LoginScreen(Screen[Credentials]):
     def say(self, text: str, error: bool = True) -> None:
         """Put a line under the box: what's wrong (red), or what's going on."""
         say_on(self, text, error)
+
+    @on(Button.Pressed, '#quit')
+    async def _quit(self) -> None:
+        """Quit (the Quit button)."""
+        await quit_app(self)
 
     @on(Button.Pressed, '#log-in')
     @on(Input.Submitted, '#pin')

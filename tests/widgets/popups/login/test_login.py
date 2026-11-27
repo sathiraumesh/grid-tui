@@ -220,3 +220,17 @@ async def test_ctrl_q_quits_from_sign_up_and_q_is_typed(tmp_path: Path) -> None:
         await pilot.press('ctrl+q')
         await pilot.pause()
         assert app.return_code is not None or not app.is_running
+
+
+@pytest.mark.parametrize('saved', [False, True])
+async def test_the_quit_button_quits(tmp_path: Path, saved: bool) -> None:
+    """Quit, on the sign-up screen or the PIN screen, closes the app."""
+    app, vault = app_with(tmp_path)
+    if saved:
+        vault.save(ALICE, '1234')
+    async with app.run_test(size=(100, 30)) as pilot:
+        await settle(app, pilot)
+        await pilot.click('#quit')
+        await pilot.pause()
+        assert app.return_code is not None or not app.is_running
+    assert vault.exists() == saved  # nothing saved, nothing erased
