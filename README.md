@@ -17,17 +17,21 @@ grid-tui                         # or: python -m grid_tui
 textual run --dev src/grid_tui/app.py   # with live CSS reload; `textual console` in another terminal for logs
 ```
 
-Outside Grid'5000 the API needs your login. Set `G5K_USER` / `G5K_PASSWORD` in
-the environment, or put them base64-encoded in `~/.grid-secret/`, one file per
-variable:
+Outside Grid'5000 the API needs your login. The first time you start
+`grid-tui` it asks you to **sign up**: your Grid'5000 login and password
+(checked with the API) and a 4-digit PIN. The login is saved encrypted with
+the PIN in `~/.grid-secret/credentials.vault` (scrypt + AES-GCM, readable by
+you only). After that the app asks only for the PIN.
 
-```sh
-make secret                      # asks for the user and password and writes them; or by hand:
-mkdir -p ~/.grid-secret && chmod 700 ~/.grid-secret
-printf '%s' 'alice'    | base64 > ~/.grid-secret/G5K_USER
-printf '%s' 'p4ssw0rd' | base64 > ~/.grid-secret/G5K_PASSWORD
-chmod 600 ~/.grid-secret/*
-```
+- Forgot the PIN? **Forgot PIN?** signs you up again; the new login and PIN
+  replace the old ones.
+- 3 wrong PINs in a row erase the saved login: sign up again.
+- `q` (or `Ctrl+Q`) quits from the PIN screen; `Ctrl+Q` while signing up.
+- A 4-digit PIN keeps the login from being read at a glance, not from someone
+  who copies the file and tries all 10,000 PINs (about an hour).
+
+To skip the screens (scripts, a Grid'5000 frontend), set `G5K_USER` /
+`G5K_PASSWORD` in the environment: that login is used as it is.
 
 ## Test
 
@@ -68,12 +72,13 @@ src/grid_tui/
   requirements.py       the Search tab's hardware needs, and which nodes meet them
   policy.py             the usage policy's periods: day, night, weekend, holidays
   my_usage.py           your jobs now, and today's daytime quota
+  vault.py              your login, saved encrypted with your PIN
   grid5000/             the API client: sites, clusters, nodes, status, jobs (login from ~/.grid-secret)
   models/               the data: Site, Cluster, Node, MetricInfo, …
   widgets/
     main_tabs/          the tabs, one panel in each
     panels/             what each tab shows: sites, clusters, nodes, reservations, search
-    popups/             screens that open over the app: node_details
+    popups/             screens over the app: login (sign up, PIN), node_details, new_reservation, confirm
     thin_scrollbar/     a slimmer scrollbar
     usage_bar/          the top-right line: policy period, how busy
   utils/                helpers: ssh (open a shell on a site's frontend)

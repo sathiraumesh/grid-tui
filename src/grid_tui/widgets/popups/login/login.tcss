@@ -1,0 +1,156 @@
+/* The sign up and log in screens: the name in block letters, one card under
+   it, and a note; all in the middle of the screen */
+
+SignUpScreen, LoginScreen {
+    align: center middle;
+}
+
+SignUpScreen .page, LoginScreen .page {
+    width: 64;
+    max-width: 95%;
+    height: auto;
+    layout: vertical;
+}
+
+/* ---- the name, and what the app is -------------------------------------- */
+
+SignUpScreen .banner, LoginScreen .banner {
+    width: 100%;
+    content-align: center middle;
+    text-align: center;
+}
+
+SignUpScreen .tagline, LoginScreen .tagline {
+    width: 100%;
+    text-align: center;
+    text-style: italic;
+    margin-bottom: 1;
+}
+
+/* ---- the card ------------------------------------------------------------ */
+
+SignUpScreen .card, LoginScreen .card {
+    width: 100%;
+    height: auto;
+    background: #1e1e1e;           /* a touch lighter than the screen */
+    border: round #fab387;
+    border-title-color: #fab387;
+    border-title-style: bold;
+    border-title-align: center;
+    border-subtitle-color: #a6adc8;
+    border-subtitle-align: right;
+    padding: 1 3;
+}
+
+SignUpScreen .intro, LoginScreen .intro {
+    width: 100%;
+    color: #cdd6f4;
+    margin-bottom: 1;
+}
+
+LoginScreen .intro {
+    text-align: center;
+}
+
+SignUpScreen .form {
+    grid-size: 2;
+    grid-columns: 11 1fr;
+    grid-rows: 1;
+    grid-gutter: 1 1;
+    height: auto;
+}
+
+SignUpScreen .form-label {
+    color: #a6adc8;
+}
+
+SignUpScreen Input, LoginScreen Input {
+    background: #313244;
+    width: 100%;
+}
+
+SignUpScreen Input:focus, LoginScreen Input:focus {
+    background: #45475a;
+}
+
+/* a PIN box, and beside it its dots (or whether the two PINs match) */
+SignUpScreen .pin-row {
+    height: 1;
+}
+
+SignUpScreen .pin-row Input {
+    width: 12;
+}
+
+SignUpScreen .pin-row .dots {
+    width: auto;
+    padding-left: 2;
+}
+
+/* logging in: big dots in the middle, a small box under them */
+LoginScreen .dots.big {
+    width: 100%;
+    text-align: center;
+    text-style: bold;
+}
+
+LoginScreen #pin {
+    width: 12;
+    margin-top: 1;
+}
+
+/* ---- what's going on, and the buttons ------------------------------------ */
+
+SignUpScreen .message, LoginScreen .message {
+    width: 100%;
+    margin-top: 1;
+    height: auto;
+    min-height: 1;
+}
+
+LoginScreen .message {
+    text-align: center;
+}
+
+SignUpScreen .buttons, LoginScreen .buttons {
+    margin-top: 1;
+    height: 1;
+    align-horizontal: right;
+}
+
+SignUpScreen Button, LoginScreen Button {
+    margin-left: 2;
+    min-width: 12;
+    background: #313244;
+    color: #cdd6f4;
+}
+
+/* the way forward: solid green */
+SignUpScreen #sign-up, LoginScreen #log-in {
+    background: #a6e3a1;
+    color: #11111b;
+    text-style: bold;
+}
+
+SignUpScreen #sign-up:hover, SignUpScreen #sign-up:focus,
+LoginScreen #log-in:hover, LoginScreen #log-in:focus {
+    background: #c3f0bf;
+}
+
+SignUpScreen #sign-up:disabled {
+    background: #45475a;
+    color: #a6adc8;
+}
+
+LoginScreen #forgot:hover, LoginScreen #forgot:focus {
+    background: #45475a;
+}
+
+/* ---- the note under the card --------------------------------------------- */
+
+SignUpScreen .note, LoginScreen .note {
+    width: 100%;
+    margin-top: 1;
+    color: #6c7086;
+    text-align: center;
+}
