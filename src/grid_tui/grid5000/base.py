@@ -165,30 +165,38 @@ class Connection:
                 return remembered[1]
         http = self._client()
         waiting = self._waiting.get(path)
-        if waiting is not None:  # the same request is on its way: wait for it
-            return await asyncio.shield(waiting)
-        future = asyncio.get_running_loop().create_future()
-        self._waiting[path] = future
-        try:
-            self.sent += 1
-            response = await http.get(path)
-            if not response.is_success:
-                raise ApiError(path, response.status_code)
-            answer = response.json()
-        except BaseException as error:
-            future.set_exception(error)
-            future.exception()  # marked as seen: no warning if nobody else waits
-            raise
-        finally:
-            if self._waiting.get(path) is future:
-                del self._waiting[path]
-        future.set_result(answer)
+        if waiting is None:
+            # the request runs on its own: if whoever asked gives up (e.g.
+            # you moved to another site), it still finishes, and its answer
+            # is remembered for the next to ask, instead of starting over
+            waiting = asyncio.ensure_future(self._send(http, path, fresh_for))
+            self._waiting[path] = waiting
+            waiting.add_done_callback(lambda done: self._done(path, done))
+        return await asyncio.shield(waiting)
+
+    async def _send(self, http: httpx.AsyncClient, path: str, fresh_for: float) -> Any:
+        """Send one GET, and remember its answer for fresh_for seconds."""
+        self.sent += 1
+        response = await http.get(path)
+        if not response.is_success:
+            raise ApiError(path, response.status_code)
+        answer = response.json()
         if fresh_for:
             self._memory[path] = (time.monotonic() + fresh_for, answer)
         return answer
 
+    def _done(self, path: str, request: asyncio.Future) -> None:
+        """A request finished: it's no longer on its way."""
+        if self._waiting.get(path) is request:
+            del self._waiting[path]
+        if not request.cancelled():
+            request.exception()  # marked as seen: no warning if nobody waited
+
     async def aclose(self) -> None:
-        """Close the connection."""
+        """Stop the requests still on their way, and close the connection."""
+        for request in list(self._waiting.values()):
+            request.cancel()
+        self._waiting.clear()
         if self._http is not None:
             await self._http.aclose()
             self._http = None

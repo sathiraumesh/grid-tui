@@ -14,8 +14,12 @@ cluster chosen. Until there is one, your usage is about every site.
   same for all of Grid'5000 ('G5K'). Every site's status comes in one round,
   so switching site shows its number at once.
 
-Both are asked for again every minute. The line sits over the tab row's empty
-right side and takes no room from the tabs.
+How busy is asked for again every 2 minutes, your jobs every 5. Your usage
+is saved too (in the client's cache): it shows at once when the app starts or
+you come back to a site, with a '…' while the new one is on its way.
+
+The line sits over the tab row's empty right side and takes no room from
+the tabs.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -129,6 +134,7 @@ class UsageBar(Static):
         self.by_site: dict[str, Usage] | None = None  # how busy each site is
         self.failed = False  # did the last try fail
         self.site: str | None = None  # the site it's about; None for all
+        self.saved = False  # is mine the saved one, while the new one loads
         self._busy_at = self._mine_at = 0.0  # when each was last loaded
         self._settle: Timer | None = None  # waiting for the cursor to stop
 
@@ -145,7 +151,9 @@ class UsageBar(Static):
         if site == self.site:
             return
         self.site = site
-        self.mine = None  # the old site's would mislead; by_site has every site
+        # the old site's usage would mislead: this site's saved one, or none
+        # (how busy every site is is in by_site already)
+        self._show_saved()
         self.redraw()
         if self._settle is not None:
             self._settle.stop()
@@ -156,8 +164,39 @@ class UsageBar(Static):
         self._settle = None
         self.load(busy=False)
 
+    def _saved_key(self, site: str | None) -> str:
+        """Where your usage on a site (None: every site) is saved in the cache."""
+        return f'grid-tui:my-usage:{site or "*"}'
+
+    def _show_saved(self) -> None:
+        """Show your usage on the site as last loaded today, if it was."""
+        self.mine, self.saved = None, False
+        cache = getattr(self.client, 'cache', None)
+        if cache is None:
+            return
+        saved = cache.get(self._saved_key(self.site))
+        if (
+            not isinstance(saved, dict)
+            or saved.get('day') != self.clock().date().isoformat()
+        ):
+            return  # none, or yesterday's: the quota starts again each day
+        try:
+            fields = {key: value for key, value in saved.items() if key != 'day'}
+            self.mine, self.saved = MyUsage(**fields), True
+        except TypeError:
+            return  # saved by another version: wait for the new one
+
+    def _save(self, site: str | None, mine: MyUsage) -> None:
+        """Save your usage on a site, to show at once next time."""
+        cache = getattr(self.client, 'cache', None)
+        if cache is not None:
+            day = self.clock().date().isoformat()
+            cache.put(self._saved_key(site), {'day': day, **asdict(mine)})
+
     def on_mount(self) -> None:
-        """Show the period at once, then load, and keep everything up to date."""
+        """Show the period (and your saved usage) at once, then load, and keep
+        everything up to date."""
+        self._show_saved()
         self.redraw()
         self.load()
         self.set_interval(TICK_SECONDS, self._tick)
@@ -209,8 +248,9 @@ class UsageBar(Static):
                 raise answer  # a bug, not the network: let it show
         now = time.monotonic()
         if isinstance(mine_answer, MyUsage) and site == self.site:  # still that site
-            self.mine = mine_answer
+            self.mine, self.saved = mine_answer, False
             self._mine_at = now
+            self._save(site, mine_answer)
         if isinstance(by_site, dict):
             self.by_site = by_site
             self._busy_at = now
@@ -276,6 +316,8 @@ class UsageBar(Static):
                 text.append(f' {percent}% quota', f'bold {level_colour(percent)}')
                 text.append(' · ', MUTED)
             text.append(jobs_text(self.mine), GREEN)
+            if self.saved:
+                text.append(' …', MUTED)  # as last seen; the new one is on its way
         if detail >= 1:
             text.append('   ')
             parts = [self.site] if self.site else []

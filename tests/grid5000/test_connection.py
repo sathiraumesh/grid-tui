@@ -90,3 +90,29 @@ async def test_one_connection_kept_open_for_every_part() -> None:
     assert client.connection._http is first  # the same, kept open
     await client.aclose()
     assert client.connection._http is None
+
+
+async def test_a_request_given_up_on_still_finishes_and_is_remembered() -> None:
+    """Whoever asked gives up (e.g. you moved to another site): the request
+    isn't cancelled, and the next to ask gets its answer without a new one."""
+    seen: list = []
+    api = connection(seen, delay=0.05)
+    asker = asyncio.ensure_future(api.get('/sites', fresh_for=60))
+    await asyncio.sleep(0.01)
+    asker.cancel()
+    assert await api.get('/sites', fresh_for=60) == {'items': SITES}
+    assert len(seen) == 1
+    await asyncio.sleep(0)
+    assert await api.get('/sites', fresh_for=60) == {'items': SITES}
+    assert len(seen) == 1  # from memory
+
+
+async def test_closing_stops_requests_on_their_way() -> None:
+    """aclose cancels what's still waiting for an answer."""
+    seen: list = []
+    api = connection(seen, delay=5)
+    asker = asyncio.ensure_future(api.get('/sites'))
+    await asyncio.sleep(0.01)
+    await api.aclose()
+    with pytest.raises(asyncio.CancelledError):
+        await asker

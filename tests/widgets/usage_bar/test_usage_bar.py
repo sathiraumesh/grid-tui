@@ -1,5 +1,6 @@
 """Tests for UsageBar: the policy period, your usage and how busy it is."""
 
+from dataclasses import asdict
 from datetime import datetime
 
 import pytest
@@ -7,6 +8,7 @@ from textual.app import App, ComposeResult
 
 from grid_tui.app import Grid5KApp
 from grid_tui.grid5000 import Client
+from grid_tui.grid5000.cache import Cache
 from grid_tui.my_usage import MyUsage
 from grid_tui.policy import PARIS
 from grid_tui.widgets.usage_bar import UsageBar, bar
@@ -330,3 +332,50 @@ def test_the_bar_is_drawn_in_eighths() -> None:
     assert bar(25).plain == '██░░░░░░'
     assert bar(31).plain == '██▌░░░░░'  # 2.48 cells: 2 full, then half a cell
     assert all(len(bar(p).plain) == 8 for p in range(0, 130, 3))
+
+
+def saved_usage_app(cache: Cache, status: int = 500) -> App:
+    """A usage line whose API answers with status, saving into cache."""
+
+    class SavedApp(App):
+        def compose(self) -> ComposeResult:
+            client = Client(
+                user='alice', transport=fake_grid5000(status=status), cache=cache
+            )
+            yield UsageBar(client, clock=lambda: THURSDAY_10)
+
+    return SavedApp()
+
+
+async def test_your_usage_from_earlier_today_shows_at_once() -> None:
+    """The quota last loaded today shows before (here: without) the API."""
+    cache = Cache(':memory:')
+    saved = {'day': '2026-11-26', **asdict(MyUsage(jobs=1, cores=8, quota_percent=37))}
+    cache.put('grid-tui:my-usage:*', saved)
+    app = saved_usage_app(cache)
+    async with app.run_test(size=(140, 10)) as pilot:
+        await settle(app, pilot)
+        assert '37% quota · 1 job, 8 cores …' in text(app)
+
+
+async def test_yesterdays_usage_isnt_shown() -> None:
+    """The quota starts again each day: yesterday's saved one is ignored."""
+    cache = Cache(':memory:')
+    saved = {'day': '2026-11-25', **asdict(MyUsage(quota_percent=37))}
+    cache.put('grid-tui:my-usage:*', saved)
+    app = saved_usage_app(cache)
+    async with app.run_test(size=(140, 10)) as pilot:
+        await settle(app, pilot)
+        assert '37%' not in text(app)
+        assert 'You ?' in text(app)
+
+
+async def test_your_usage_is_saved_once_loaded() -> None:
+    """A loaded usage is saved for today, and shown without the '…'."""
+    cache = Cache(':memory:')
+    app = saved_usage_app(cache, status=200)
+    async with app.run_test(size=(140, 10)) as pilot:
+        await settle(app, pilot)
+        assert '…' not in text(app)
+    saved = cache.get('grid-tui:my-usage:*')
+    assert saved is not None and saved['day'] == '2026-11-26'
