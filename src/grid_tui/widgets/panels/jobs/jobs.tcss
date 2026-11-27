@@ -1,0 +1,48 @@
+/* Styles for the JobsPanel */
+
+JobsPanel {
+    height: 1fr;
+}
+
+JobsPanel #jobs-status {
+    height: 1;
+    margin-bottom: 1;
+    color: #a6adc8;
+}
+
+JobsPanel DataTable {
+    height: 1fr;
+    background: #1e1e2e;
+}
+
+JobsPanel DataTable > .datatable--header {
+    color: #fab387;
+    background: #313244;
+    text-style: bold;
+}
+
+JobsPanel DataTable > .datatable--cursor {
+    background: #45475a;
+}
+
+/* the Machines box under the table: the highlighted job's machines */
+
+JobsPanel #job-machines {
+    height: auto;
+    max-height: 8;                 /* a long list scrolls */
+    margin-top: 1;
+    border: round #45475a;
+    border-title-color: #fab387;
+    border-title-style: bold;
+    border-subtitle-color: #a6adc8;
+    background: #1e1e2e;
+    padding: 0 1;
+}
+
+JobsPanel #job-machines:focus {
+    border: round #fab387;         /* orange while you pick a machine */
+}
+
+JobsPanel #job-machines > .option-list--option-highlighted {
+    background: #45475a;
+}

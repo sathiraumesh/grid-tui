@@ -247,12 +247,15 @@ def fake_client(
     status: int = 200,
     nodes: dict[tuple[str, str], list[dict]] | None = None,
     statuses: dict[str, dict] | None = None,
+    jobs: dict[str, list[dict]] | None = None,
+    user: str = '',
 ) -> Client:
     """A Client talking to fake_grid5000: no sites unless given, so tests stay
-    offline."""
-    return Client(
-        transport=fake_grid5000(sites, clusters, status, nodes=nodes, statuses=statuses)
+    offline. With a user, it is logged in as them (for their jobs)."""
+    transport = fake_grid5000(
+        sites, clusters, status, nodes=nodes, statuses=statuses, jobs=jobs
     )
+    return Client(user=user, transport=transport)
 
 
 def g5k_client(status: int = 200) -> Client:

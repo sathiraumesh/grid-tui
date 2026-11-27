@@ -27,6 +27,7 @@ class Job(BaseModel):
     stopped_at: int | None = None  # when it ended, if it has
     assigned_nodes: tuple[str, ...] = ()  # e.g. ('gros-1.nancy.grid5000.fr',)
     cores: int = 0  # how many cores it holds
+    types: tuple[str, ...] = ()  # e.g. ('deploy',): how it was asked for
 
     @field_validator('submitted_at', 'started_at', 'stopped_at', mode='before')
     @classmethod
@@ -34,7 +35,7 @@ class Job(BaseModel):
         """The API uses 0 or null for 'not yet'."""
         return value or None
 
-    @field_validator('assigned_nodes', mode='before')
+    @field_validator('assigned_nodes', 'types', mode='before')
     @classmethod
     def _null_is_empty(cls, value: Any) -> Any:
         """No nodes yet (or null) is none."""
@@ -50,6 +51,11 @@ class Job(BaseModel):
         """
         cores = (answer.get('resources_by_type') or {}).get('cores') or []
         return cls.model_validate({**answer, 'site': site, 'cores': len(cores)})
+
+    @property
+    def is_deploy(self) -> bool:
+        """Was it asked for with -t deploy (your own system, reached as root)?"""
+        return 'deploy' in self.types
 
     @property
     def is_active(self) -> bool:

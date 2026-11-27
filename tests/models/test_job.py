@@ -54,3 +54,13 @@ def test_not_started_did_not_run() -> None:
     assert job.ran(now=99999) is None
     assert job.is_active
     assert not job.is_running
+
+
+def test_types_and_deploy() -> None:
+    """A job's types are read; one of type deploy says so; null is none."""
+    deployed = Job.from_api({'uid': 1, 'types': ['deploy', 'night']}, 'nancy')
+    assert deployed.types == ('deploy', 'night')
+    assert deployed.is_deploy is True
+    plain = Job.from_api({'uid': 2, 'types': None}, 'nancy')
+    assert plain.types == ()
+    assert plain.is_deploy is False

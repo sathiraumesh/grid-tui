@@ -8,6 +8,7 @@ from grid_tui.app import Grid5KApp
 from grid_tui.grid5000 import Cache, Client
 from grid_tui.widgets.main_tabs import MainTabs
 from grid_tui.widgets.panels.clusters import ClusterPanel
+from grid_tui.widgets.panels.jobs import JobsPanel
 from grid_tui.widgets.panels.nodes import NodesPanel
 from grid_tui.widgets.panels.search import SearchPanel
 from grid_tui.widgets.panels.sites import SitesPanel
@@ -53,7 +54,7 @@ async def test_q_quits() -> None:
 
 
 async def test_number_keys_switch_tabs() -> None:
-    """1, 2, 3 and 4 switch to the Sites, Clusters, Nodes and Search tabs."""
+    """1 to 6 switch to the six tabs, from Sites to Jobs."""
     app = Grid5KApp(fake_client())
     async with app.run_test() as pilot:
         tabs = app.query_one(MainTabs)
@@ -66,6 +67,8 @@ async def test_number_keys_switch_tabs() -> None:
         assert tabs.active == 'reservations'
         await pilot.press('5')
         assert tabs.active == 'search'
+        await pilot.press('6')
+        assert tabs.active == 'jobs'
         await pilot.press('1')
         assert tabs.active == 'sites'
 
@@ -245,3 +248,50 @@ async def test_search_loads_nothing_until_its_tab_is_opened() -> None:
         await pilot.press('5')
         await settle(app, pilot)
         assert search.found is not None
+
+
+# Your jobs
+
+
+async def test_jobs_load_only_once_their_tab_is_opened() -> None:
+    """The Jobs panel loads nothing until you open its tab.
+
+    (The usage line, top right, asks for your jobs on its own: that's not it.)
+    """
+    jobs = {'nancy': [], 'lyon': []}
+    client = fake_client(SITES, jobs=jobs, user='alice')
+    app = Grid5KApp(client)
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        panel = app.query_one(JobsPanel)
+        assert panel._loaded_at is None
+        await pilot.press('6')
+        await settle(app, pilot)
+        assert panel._loaded_at is not None
+
+
+async def test_choosing_a_job_opens_its_clusters_reservations() -> None:
+    """Enter on a running job opens the Reservations tab on its cluster."""
+    from grid_tui.widgets.panels.reservations import ReservationsPanel
+
+    running = {
+        'uid': 7,
+        'state': 'running',
+        'started_at': 1,
+        'walltime': 3600,
+        'assigned_nodes': ['gros-1.nancy.grid5000.fr'],
+    }
+    client = fake_client(
+        SITES, CLUSTERS, jobs={'nancy': [running], 'lyon': []}, user='alice'
+    )
+    app = Grid5KApp(client)
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        await pilot.press('6')
+        await settle(app, pilot)
+        app.query_one(JobsPanel).query_one(DataTable).focus()
+        await pilot.press('enter')
+        await settle(app, pilot)
+        assert app.query_one(MainTabs).active == 'reservations'
+        panel = app.query_one(ReservationsPanel)
+        assert (panel.site, panel.cluster) == ('nancy', 'gros')

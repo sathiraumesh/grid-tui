@@ -7,6 +7,7 @@ from textual.widgets import Footer
 from grid_tui.grid5000 import Client
 from grid_tui.widgets.main_tabs import MainTabs
 from grid_tui.widgets.panels.clusters import ClusterPanel
+from grid_tui.widgets.panels.jobs import JobsPanel
 from grid_tui.widgets.panels.nodes import NodesPanel
 from grid_tui.widgets.panels.reservations import ReservationsPanel
 from grid_tui.widgets.panels.search import SearchPanel
@@ -30,6 +31,7 @@ class Grid5KApp(App):
         ('3', "show_tab('nodes')", 'Nodes'),
         ('4', "show_tab('reservations')", 'Reservations'),
         ('5', "show_tab('search')", 'Search'),
+        ('6', "show_tab('jobs')", 'Jobs'),
     ]
 
     def __init__(self, client: Client | None = None) -> None:
@@ -101,6 +103,16 @@ class Grid5KApp(App):
         self.query_one(ReservationsPanel).show_cluster(message.site, message.cluster)
         self.query_one(UsageBar).show_site(message.site)
 
+    def on_jobs_panel_chosen(self, message: JobsPanel.Chosen) -> None:
+        """A job was chosen in the Jobs tab: show its cluster's reservations."""
+        # let go of the focus first: else it moves to the next widget of the
+        # Jobs tab (its Machines list), and the tabs follow it straight back
+        self.set_focus(None)
+        self.query_one(MainTabs).show('reservations')
+        self.query_one(ReservationsPanel).show_cluster(message.site, message.cluster)
+        self.query_one(NodesPanel).show_cluster(message.site, message.cluster)
+        self.query_one(UsageBar).show_site(message.site)
+
     def on_resize(self) -> None:
         """The terminal changed size: keep the usage line in the top-right corner."""
         self.query_one(UsageBar).place()
@@ -122,9 +134,11 @@ class Grid5KApp(App):
             self.query_one(ReservationsPanel).load(refresh=True)
         elif tab == 'search':
             self.query_one(SearchPanel).load(refresh=True)
+        elif tab == 'jobs':
+            self.query_one(JobsPanel).load(refresh=True)
 
     def action_show_tab(self, tab: str) -> None:
-        """Switch to the tab with this id (the 1 to 5 keys)."""
+        """Switch to the tab with this id (the 1 to 6 keys)."""
         self.query_one(MainTabs).show(tab)
 
 

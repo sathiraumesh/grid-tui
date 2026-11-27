@@ -9,6 +9,7 @@ from textual.widgets import TabbedContent, TabPane
 
 from grid_tui.grid5000 import Client
 from grid_tui.widgets.panels.clusters import ClusterPanel
+from grid_tui.widgets.panels.jobs import JobsPanel
 from grid_tui.widgets.panels.nodes import NodesPanel
 from grid_tui.widgets.panels.reservations import ReservationsPanel
 from grid_tui.widgets.panels.search import SearchPanel
@@ -32,7 +33,7 @@ class MainTabs(Widget):
         self.client = client
 
     def compose(self) -> ComposeResult:
-        """The tabs and their panels: Sites, Clusters, Nodes, Reservations, Search."""
+        """The tabs: Sites, Clusters, Nodes, Reservations, Search and Jobs."""
         with TabbedContent(initial='sites'):
             with TabPane('Sites', id='sites'):
                 yield SitesPanel(self.client)
@@ -44,6 +45,8 @@ class MainTabs(Widget):
                 yield ReservationsPanel(self.client)
             with TabPane('Search', id='search'):
                 yield SearchPanel(self.client)
+            with TabPane('Jobs', id='jobs'):
+                yield JobsPanel(self.client)
 
     @property
     def active(self) -> str:

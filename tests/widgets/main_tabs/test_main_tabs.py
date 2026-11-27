@@ -23,7 +23,7 @@ async def test_starts_on_sites() -> None:
 
 
 async def test_has_a_tab_per_panel() -> None:
-    """There are Sites, Clusters, Nodes and Search tabs, in that order."""
+    """There are Sites, Clusters, Nodes, Reservations, Search and Jobs tabs."""
     app = TabsApp()
     async with app.run_test():
         panes = app.query_one(TabbedContent).query('TabPane')
@@ -33,6 +33,7 @@ async def test_has_a_tab_per_panel() -> None:
             'nodes',
             'reservations',
             'search',
+            'jobs',
         ]
 
 

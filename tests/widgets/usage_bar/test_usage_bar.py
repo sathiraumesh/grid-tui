@@ -134,7 +134,8 @@ async def test_choosing_a_site_in_the_app_follows_it() -> None:
     from grid_tui.widgets.panels.sites import SitesPanel
 
     app = Grid5KApp(g5k_client())
-    async with app.run_test(size=(120, 30)) as pilot:
+    # wide enough for the longest line beside all six tabs
+    async with app.run_test(size=(140, 30)) as pilot:
         await settle(app, pilot)
         assert text(app).endswith('G5K 67% busy')
         table = app.query_one(SitesPanel).query_one(DataTable)
