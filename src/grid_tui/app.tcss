@@ -1,7 +1,7 @@
 /* Styles for the whole app. Textual CSS: https://textual.textualize.io/guide/CSS/ */
 
 Screen {
-    background: #1e1e2e;        /* the whole app's background */
+    background: #181818;   /* VS Code's terminal background (Dark Modern) */
     color: #cdd6f4;             /* default text colour */
     align: center middle;
     border: round #fab387;    
@@ -25,7 +25,7 @@ Screen {
 }
 
 Footer {
-    background: #1e1e2e;
+    background: #181818;
 }
 
 Footer .footer-key--key {
@@ -63,8 +63,8 @@ Toast.-error .toast--title { color: #f38ba8; }
     scrollbar-color: #fab387;                /* the part you drag: orange */
     scrollbar-color-hover: #f9c7a3;          /* a lighter orange under the mouse */
     scrollbar-color-active: #fab387;         /* while dragging */
-    scrollbar-background: #1e1e2e;           /* behind the line: same as the screen */
-    scrollbar-background-hover: #1e1e2e;
-    scrollbar-background-active: #1e1e2e;
-    scrollbar-corner-color: #1e1e2e;         /* the square where the two bars meet */
+    scrollbar-background: #181818;           /* behind the line: same as the screen */
+    scrollbar-background-hover: #181818;
+    scrollbar-background-active: #181818;
+    scrollbar-corner-color: #181818;         /* the square where the two bars meet */
 }

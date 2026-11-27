@@ -12,7 +12,7 @@ JobsPanel #jobs-status {
 
 JobsPanel DataTable {
     height: 1fr;
-    background: #1e1e2e;
+    background: #181818;
 }
 
 JobsPanel DataTable > .datatable--header {
@@ -35,7 +35,7 @@ JobsPanel #job-machines {
     border-title-color: #fab387;
     border-title-style: bold;
     border-subtitle-color: #a6adc8;
-    background: #1e1e2e;
+    background: #181818;
     padding: 0 1;
 }
 

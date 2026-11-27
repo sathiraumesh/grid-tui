@@ -6,7 +6,7 @@ SitesPanel {
 
 SitesPanel DataTable {
     height: 1fr;
-    background: #1e1e2e;
+    background: #181818;
 }
 
 SitesPanel DataTable > .datatable--header {

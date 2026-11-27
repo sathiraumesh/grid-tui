@@ -17,7 +17,7 @@ NodesPanel #nodes-title.-chosen {
 
 NodesPanel DataTable {
     height: 1fr;
-    background: #1e1e2e;
+    background: #181818;
 }
 
 NodesPanel DataTable > .datatable--header {

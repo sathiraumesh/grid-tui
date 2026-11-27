@@ -23,7 +23,7 @@ from grid_tui.models.reservation import UP, Reservation, Schedule, node_number
 from grid_tui.policy import PARIS, period_at
 
 # colours (the app's palette)
-BACKGROUND = '#1e1e2e'
+BACKGROUND = '#181818'
 DARK = '#1e1e2e'  # text on a bar
 MUTED = '#6c7086'
 FAINT = '#313244'

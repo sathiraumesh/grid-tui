@@ -32,11 +32,11 @@ async def test_frame_shows_title_and_subtitle() -> None:
 
 
 async def test_stylesheet_is_applied() -> None:
-    """app.tcss is loaded: the dark background and the orange frame."""
+    """app.tcss is loaded: VS Code's background and the orange frame."""
     app = Grid5KApp(fake_client())
     async with app.run_test():
         styles = app.screen.styles
-        assert styles.background.hex == '#1E1E2E'
+        assert styles.background.hex == '#181818'  # VS Code's terminal colour
 
         edge_type, edge_color = styles.border_top
         assert edge_type == 'round'

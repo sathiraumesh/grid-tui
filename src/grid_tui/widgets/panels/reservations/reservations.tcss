@@ -134,7 +134,7 @@ ReservationsPanel #res-axis {
 
 ReservationsPanel DataTable {
     height: 1fr;
-    background: #1e1e2e;
+    background: #181818;
 }
 
 ReservationsPanel DataTable > .datatable--cursor {
@@ -142,7 +142,7 @@ ReservationsPanel DataTable > .datatable--cursor {
 }
 
 ReservationsPanel DataTable > .datatable--even-row {
-    background: #1e1e2e;
+    background: #181818;
 }
 
 ReservationsPanel #res-free {

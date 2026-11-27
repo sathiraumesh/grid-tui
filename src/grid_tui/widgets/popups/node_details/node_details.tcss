@@ -9,7 +9,7 @@ NodeDetails #details {
     width: 80%;
     max-width: 100;
     height: 85%;
-    background: #1e1e2e;
+    background: #181818;
     border: round #fab387;
     border-title-color: #fab387;
     border-title-style: bold;
