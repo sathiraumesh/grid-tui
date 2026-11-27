@@ -7,9 +7,12 @@ from textual.app import App, ComposeResult
 from textual.widgets import Button, DataTable, Label, Select
 
 from grid_tui.grid5000 import Client
+from grid_tui.my_usage import MyUsage
 from grid_tui.utils import ssh
 from grid_tui.widgets.panels.clusters import ClusterPanel
+from grid_tui.widgets.panels.clusters.clusters import quota_cell
 from tests.grid5000.fakes import CLUSTERS, SITES, fake_grid5000, g5k_client
+from tests.test_my_usage import THURSDAY, answer, client_with
 from tests.widgets.panels.helpers import rows, settle
 
 
@@ -60,7 +63,7 @@ async def test_shows_every_sites_clusters_by_default() -> None:
     app = ClustersApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
-        assert rows(table(app)) == [
+        assert [row[:6] for row in rows(table(app))] == [
             ['nancy', 'gros', 'Dell R640', 'default', '', 'yes'],
             ['nancy', 'grisou', 'Dell R630', 'default, admin', '', ''],
             ['lyon', 'nova', 'Dell R430', 'default', 'yes', ''],
@@ -68,12 +71,20 @@ async def test_shows_every_sites_clusters_by_default() -> None:
 
 
 async def test_has_the_columns() -> None:
-    """The columns are Site, Cluster, Model, Queues, Exotic and KaVLAN."""
+    """Site, Cluster, Model, Queues, Exotic, KaVLAN, and your quota."""
     app = ClustersApp(g5k_client())
     async with app.run_test() as pilot:
         await settle(app, pilot)
         labels = [str(c.label) for c in table(app).columns.values()]
-        assert labels == ['Site', 'Cluster', 'Model', 'Queues', 'Exotic', 'KaVLAN']
+        assert labels == [
+            'Site',
+            'Cluster',
+            'Model',
+            'Queues',
+            'Exotic',
+            'KaVLAN',
+            'Your quota',
+        ]
 
 
 async def test_made_with_a_site_shows_only_its_clusters() -> None:
@@ -318,3 +329,38 @@ async def test_no_ssh_installed(monkeypatch: pytest.MonkeyPatch) -> None:
         app.query_one(ClusterPanel).action_ssh()
         await pilot.pause()
         assert any('OpenSSH' in n.message for n in app._notifications)
+
+
+# Your quota, per cluster
+
+
+class QuotaApp(App):
+    """The Clusters panel on nancy, on Thursday at noon, with your jobs."""
+
+    def __init__(self, client: Client) -> None:
+        super().__init__()
+        self.client = client
+
+    def compose(self) -> ComposeResult:
+        yield ClusterPanel(self.client, site='nancy', clock=lambda: THURSDAY)
+
+
+async def test_each_cluster_shows_your_quota_on_it() -> None:
+    """9 of gros's 18 cores for 2 h: 50% on gros; nothing on grisou."""
+    client = client_with([answer()])
+    client.sites = g5k_client().sites  # nancy's clusters, from the fake API
+    app = QuotaApp(client)
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        quota = {row[1]: str(row[6]) for row in rows(table(app))}
+        assert quota['gros'].endswith(' 50%')
+        assert quota['grisou'].endswith(' 0%')
+
+
+def test_quota_cell() -> None:
+    """'…' while loading, 'no quota today' on a weekend, else a bar and %."""
+    assert str(quota_cell(None, 'nancy/gros')) == '…'
+    assert str(quota_cell(MyUsage(), 'nancy/gros')) == 'no quota today'
+    mine = MyUsage(quota_percent=50, by_cluster={'nancy/gros': 50})
+    assert str(quota_cell(mine, 'nancy/gros')) == '███░░░ 50%'
+    assert str(quota_cell(mine, 'nancy/grisou')) == '░░░░░░ 0%'

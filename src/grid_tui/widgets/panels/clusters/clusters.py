@@ -1,20 +1,50 @@
-"""The Clusters panel: a table of every Grid'5000 cluster, or one site's."""
+"""The Clusters panel: a table of every Grid'5000 cluster, or one site's.
 
+The quota is per cluster (2 h on all its cores, each working day), so the
+table's last column is your share of today's quota on each cluster.
+"""
+
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
+from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult, SuspendNotSupported
 from textual.binding import Binding
 from textual.containers import Horizontal
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button, DataTable, Label, Select
 
 from grid_tui.grid5000 import ApiError, Client
 from grid_tui.models import Cluster
+from grid_tui.my_usage import MyUsage, my_usage
+from grid_tui.policy import PARIS
 from grid_tui.utils import ssh
+from grid_tui.widgets.usage_bar.usage_bar import MUTED, bar, level_colour
+
+QUOTA_BAR = 6  # cells in each row's quota bar
+
+
+def quota_cell(mine: MyUsage | None, key: str) -> Text:
+    """Your quota on one cluster: '██░░░░ 30%'; '…' while it loads.
+
+    Args:
+        mine: Your usage (None: still loading).
+        key: The cluster, as 'site/cluster'.
+    """
+    if mine is None:
+        return Text('…', MUTED)
+    if mine.quota_percent is None:
+        return Text('no quota today', MUTED)  # a weekend or a holiday
+    percent = mine.by_cluster.get(key, 0)
+    text = bar(percent, QUOTA_BAR)
+    text.append(f' {percent}%', level_colour(percent) if percent else MUTED)
+    return text
 
 
 class ClusterPanel(Widget):
@@ -37,18 +67,29 @@ class ClusterPanel(Widget):
             self.site = site
             self.cluster = cluster
 
-    def __init__(self, client: Client, site: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        client: Client,
+        site: str | None = None,
+        *,
+        clock: Callable[[], datetime] | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Make the panel.
 
         Args:
             client: Where to load the clusters from.
             site: Show only this site's clusters, e.g. 'nancy';
                 None shows the clusters of every site.
+            clock: What gives the time now (for today's quota); tests pass
+                a fixed one.
             **kwargs: Passed on to Widget, e.g. id or classes.
         """
         super().__init__(**kwargs)
         self.client = client
         self.site = site
+        self.clock = clock or (lambda: datetime.now(PARIS))
+        self.mine: MyUsage | None = None  # your usage on the clusters shown
         self._dropdown_sites: set[str] = set()  # the sites the dropdown has
 
     def compose(self) -> ComposeResult:
@@ -63,9 +104,9 @@ class ClusterPanel(Widget):
 
     def on_mount(self) -> None:
         """Add the columns and start loading, once the panel is shown."""
-        self.query_one(DataTable).add_columns(
-            'Site', 'Cluster', 'Model', 'Queues', 'Exotic', 'KaVLAN'
-        )
+        table = self.query_one(DataTable)
+        table.add_columns('Site', 'Cluster', 'Model', 'Queues', 'Exotic', 'KaVLAN')
+        table.add_column('Your quota', key='quota')
         self.load_sites()
         self.load()
 
@@ -130,6 +171,37 @@ class ClusterPanel(Widget):
         finally:
             self.loading = False
         self.show(by_site)
+        self.load_quota(refresh=refresh)
+
+    @work(exclusive=True, group='quota')
+    async def load_quota(self, refresh: bool = False) -> None:
+        """Fetch your usage on the site (or every site) and fill the quota column.
+
+        Your jobs are remembered for a few minutes, so this mostly costs no
+        request: the top-right line has just asked for them.
+
+        Args:
+            refresh: Ask the API again, not what was asked a moment ago (r).
+        """
+        self.mine = None
+        self._fill_quota()
+        site = self.site
+        try:
+            mine = await my_usage(self.client, self.clock(), site, refresh=refresh)
+        except (ApiError, httpx.HTTPError):
+            return  # the cells keep their '…'; the top-right line says '?'
+        if site == self.site:  # still the same site
+            self.mine = mine
+            self._fill_quota()
+
+    def _fill_quota(self) -> None:
+        """Write your quota in every row's last cell."""
+        try:
+            table = self.query_one(DataTable)
+        except NoMatches:
+            return  # the app closed while your jobs were on their way
+        for row in list(table.rows):
+            table.update_cell(row, 'quota', quota_cell(self.mine, row.value))
 
     def show(self, by_site: dict[str, list[Cluster]]) -> None:
         """Put the clusters in the table, site by site."""
@@ -144,6 +216,7 @@ class ClusterPanel(Widget):
                     ', '.join(cluster.queues),
                     'yes' if cluster.exotic else '',
                     'yes' if cluster.kavlan else '',
+                    quota_cell(self.mine, f'{site}/{cluster.uid}'),
                     key=f'{site}/{cluster.uid}',
                 )
         self._update_ssh_label()

@@ -105,6 +105,31 @@ class ApiError(Exception):
         super().__init__(message)
 
 
+async def _wait_for(request: asyncio.Future) -> Any:
+    """Wait for a shared request's answer; giving up doesn't cancel it.
+
+    Like asyncio.shield, but a request that fails after you gave up isn't
+    logged as an error nobody saw: whoever asks next gets it (or a new try).
+    """
+    mine = asyncio.get_running_loop().create_future()
+
+    def copy(done: asyncio.Future) -> None:
+        if mine.done():
+            return  # you gave up
+        if done.cancelled():
+            mine.cancel()
+        elif done.exception() is not None:
+            mine.set_exception(done.exception())
+        else:
+            mine.set_result(done.result())
+
+    request.add_done_callback(copy)
+    try:
+        return await mine
+    finally:
+        request.remove_done_callback(copy)
+
+
 class Connection:
     """One connection to the API, shared by a Client's parts.
 
@@ -172,7 +197,7 @@ class Connection:
             waiting = asyncio.ensure_future(self._send(http, path, fresh_for))
             self._waiting[path] = waiting
             waiting.add_done_callback(lambda done: self._done(path, done))
-        return await asyncio.shield(waiting)
+        return await _wait_for(waiting)
 
     async def _send(self, http: httpx.AsyncClient, path: str, fresh_for: float) -> Any:
         """Send one GET, and remember its answer for fresh_for seconds."""

@@ -1,33 +1,26 @@
-"""The top-right line: the policy period, your usage, and how busy it is.
+"""The top-right line: the policy period, and how busy it is.
 
-    Day · until 19:00   You ██░░░░░░ 12% quota · 1 job   nancy 91% · G5K 69% busy
+    Day · until 19:00   nancy 91% · G5K 69% busy
 
 It follows a site: the one highlighted in the Sites tab, or the last site or
-cluster chosen. Until there is one, your usage is about every site.
+cluster chosen. Until there is one, it shows all of Grid'5000 ('G5K').
 
 - The period comes from the clock (see grid_tui.policy).
-- Your usage is your share of today's daytime quota on your most used
-  cluster of the site, and what you run there now (see grid_tui.my_usage).
-  The bar's colour says how close you are: green, yellow from half, orange
-  from 80%, red once it's used up.
 - How busy: the site's nodes that run a job, of those that are up, and the
-  same for all of Grid'5000 ('G5K'). Every site's status comes in one round,
-  so switching site shows its number at once.
+  same for all of Grid'5000. Every site's status comes in one round, so
+  switching site shows its number at once.
 
-How busy is asked for again every 2 minutes, your jobs every 5. Your usage
-is saved too (in the client's cache): it shows at once when the app starts or
-you come back to a site, with a '…' while the new one is on its way.
+Your quota is per cluster, so it is in the Clusters tab, not here; bar() and
+level_colour() draw it there.
 
-The line sits over the tab row's empty right side and takes no room from
-the tabs.
+How busy is asked for again every 2 minutes. The line sits over the tab
+row's empty right side and takes no room from the tabs.
 """
 
 from __future__ import annotations
 
-import asyncio
 import time
 from collections.abc import Callable
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -35,19 +28,15 @@ from typing import Any
 import httpx
 from rich.text import Text
 from textual import work
-from textual.timer import Timer
 from textual.widgets import Static
 
 from grid_tui.grid5000 import ApiError, Client
 from grid_tui.models import Usage
-from grid_tui.my_usage import MyUsage, my_usage
 from grid_tui.policy import PARIS, period_at
 
 BAR_WIDTH = 8
 BUSY_SECONDS = 120  # how often to ask how busy every site is
-MINE_SECONDS = 300  # how often to ask for your jobs (r, or a new site: at once)
 TICK_SECONDS = 30  # how often to redraw and see what's old; costs no request
-SETTLE_SECONDS = 0.4  # moving through sites: wait for the cursor to stop
 
 TABS_WIDTH = 34  # the tab labels on the left of the same row: keep clear of them
 GREEN, RED = '#a6e3a1', '#f38ba8'
@@ -98,18 +87,8 @@ def bar(percent: int, width: int = BAR_WIDTH) -> Text:
     return text
 
 
-def jobs_text(mine: MyUsage) -> str:
-    """What you run: '1 job, 32 cores', '2 jobs waiting', or 'no jobs'."""
-    if mine.jobs:
-        jobs = f'{mine.jobs} job{"s" if mine.jobs != 1 else ""}'
-        return f'{jobs}, {mine.cores} cores'
-    if mine.waiting:
-        return f'{mine.waiting} waiting'
-    return 'no jobs'
-
-
 class UsageBar(Static):
-    """The policy period, your usage and how busy Grid'5000 is, kept up to date."""
+    """The policy period and how busy Grid'5000 is, kept up to date."""
 
     DEFAULT_CSS = (Path(__file__).parent / 'usage_bar.tcss').read_text()
 
@@ -123,80 +102,32 @@ class UsageBar(Static):
         """Make the line.
 
         Args:
-            client: Where to ask (your jobs need your login).
+            client: Where to ask.
             clock: What gives the time now; tests pass a fixed one.
             **kwargs: Passed on to Static, e.g. id or classes.
         """
         super().__init__(**kwargs)
         self.client = client
         self.clock = clock or (lambda: datetime.now(PARIS))
-        self.mine: MyUsage | None = None  # None until loaded
         self.by_site: dict[str, Usage] | None = None  # how busy each site is
         self.failed = False  # did the last try fail
         self.site: str | None = None  # the site it's about; None for all
-        self.saved = False  # is mine the saved one, while the new one loads
-        self._busy_at = self._mine_at = 0.0  # when each was last loaded
-        self._settle: Timer | None = None  # waiting for the cursor to stop
+        self._busy_at = 0.0  # when it was last loaded
 
     def show_site(self, site: str | None) -> None:
-        """Be about another site (None for all of Grid'5000), and load it.
+        """Be about another site (None for all of Grid'5000).
 
-        Moving the cursor through sites calls this for each: the jobs are
-        asked for only once the cursor stops (SETTLE_SECONDS). How busy each
-        site is is already loaded, so that shows at once.
+        How busy each site is is already loaded, so it shows at once.
 
         Args:
             site: The site, e.g. 'nancy'; None for every site.
         """
-        if site == self.site:
-            return
-        self.site = site
-        # the old site's usage would mislead: this site's saved one, or none
-        # (how busy every site is is in by_site already)
-        self._show_saved()
-        self.redraw()
-        if self._settle is not None:
-            self._settle.stop()
-        self._settle = self.set_timer(SETTLE_SECONDS, self._load_mine)
-
-    def _load_mine(self) -> None:
-        """The cursor has stopped on a site: load your jobs there."""
-        self._settle = None
-        self.load(busy=False)
-
-    def _saved_key(self, site: str | None) -> str:
-        """Where your usage on a site (None: every site) is saved in the cache."""
-        return f'grid-tui:my-usage:{site or "*"}'
-
-    def _show_saved(self) -> None:
-        """Show your usage on the site as last loaded today, if it was."""
-        self.mine, self.saved = None, False
-        cache = getattr(self.client, 'cache', None)
-        if cache is None:
-            return
-        saved = cache.get(self._saved_key(self.site))
-        if (
-            not isinstance(saved, dict)
-            or saved.get('day') != self.clock().date().isoformat()
-        ):
-            return  # none, or yesterday's: the quota starts again each day
-        try:
-            fields = {key: value for key, value in saved.items() if key != 'day'}
-            self.mine, self.saved = MyUsage(**fields), True
-        except TypeError:
-            return  # saved by another version: wait for the new one
-
-    def _save(self, site: str | None, mine: MyUsage) -> None:
-        """Save your usage on a site, to show at once next time."""
-        cache = getattr(self.client, 'cache', None)
-        if cache is not None:
-            day = self.clock().date().isoformat()
-            cache.put(self._saved_key(site), {'day': day, **asdict(mine)})
+        if site != self.site:
+            self.site = site
+            self.redraw()
 
     def on_mount(self) -> None:
-        """Show the period (and your saved usage) at once, then load, and keep
-        everything up to date."""
-        self._show_saved()
+        """Show the period at once, then load, and keep everything up to date."""
         self.redraw()
         self.load()
         self.set_interval(TICK_SECONDS, self._tick)
@@ -208,52 +139,26 @@ class UsageBar(Static):
         session runs (see Grid5KApp.polling); when it comes back, the next
         tick catches up.
         """
-        if getattr(self.app, 'polling', True):
-            now = time.monotonic()
-            busy = now - self._busy_at >= BUSY_SECONDS
-            mine = now - self._mine_at >= MINE_SECONDS
-            if busy or mine:
-                self.load(busy=busy, mine=mine)
-                return
+        polling = getattr(self.app, 'polling', True)
+        if polling and time.monotonic() - self._busy_at >= BUSY_SECONDS:
+            self.load()
+            return
         self.redraw()
 
     @work(exclusive=True, group='usage')
-    async def load(
-        self, *, busy: bool = True, mine: bool = True, refresh: bool = False
-    ) -> None:
-        """Ask for your usage and how busy every site is, then redraw.
+    async def load(self, *, refresh: bool = False) -> None:
+        """Ask how busy every site is, then redraw.
 
         Args:
-            busy: Ask how busy every site is.
-            mine: Ask for your jobs (on the site, or every site).
             refresh: Ask the API even for answers it remembers.
         """
-        site = self.site
-
-        async def nothing() -> None:
-            return None
-
-        answers = await asyncio.gather(
-            my_usage(self.client, self.clock(), site, refresh=refresh)
-            if mine
-            else nothing(),
-            self.client.status.usage_by_site(refresh=refresh) if busy else nothing(),
-            return_exceptions=True,
-        )
-        mine_answer, by_site = answers
-        errors = (ApiError, httpx.HTTPError)
-        self.failed = any(isinstance(answer, errors) for answer in answers)
-        for answer in answers:
-            if isinstance(answer, BaseException) and not isinstance(answer, errors):
-                raise answer  # a bug, not the network: let it show
-        now = time.monotonic()
-        if isinstance(mine_answer, MyUsage) and site == self.site:  # still that site
-            self.mine, self.saved = mine_answer, False
-            self._mine_at = now
-            self._save(site, mine_answer)
-        if isinstance(by_site, dict):
-            self.by_site = by_site
-            self._busy_at = now
+        try:
+            by_site = await self.client.status.usage_by_site(refresh=refresh)
+        except (ApiError, httpx.HTTPError):
+            self.failed = True
+        else:
+            self.by_site, self.failed = by_site, False
+            self._busy_at = time.monotonic()
         self.redraw()
 
     def busy(self, site: str | None) -> Usage | None:
@@ -275,7 +180,7 @@ class UsageBar(Static):
         """
         room = self.parent.size.width if self.parent is not None else 0
         tabs_end = self.tabs_end()
-        for detail in (3, 2, 1, 0):  # less and less detail until it fits
+        for detail in (2, 1, 0):  # less and less detail until it fits
             text = self.line(detail)
             if text.cell_len + 2 <= room - tabs_end:
                 break
@@ -294,45 +199,31 @@ class UsageBar(Static):
         return max(ends) + 2 if ends else TABS_WIDTH
 
     def line(self, detail: int = 3) -> Text:
-        """The line: period, your usage, how busy the site and Grid'5000 are.
+        """The line: the period, how busy the site and Grid'5000 are.
 
         Args:
-            detail: 3 for all of it; 2 leaves out when the period ends; 1 also
-                leaves out Grid'5000's number (the site's stays); 0 leaves out
-                how busy it is altogether.
+            detail: 2 for all of it; 1 leaves out when the period ends; 0
+                also leaves out Grid'5000's number (the site's stays).
         """
         now = self.clock()
         period = period_at(now)
         text = Text(period.name, f'bold {ORANGE}')
-        if detail >= 3:
+        if detail >= 2:
             text.append(f' · until {period.until(now)}', MUTED)
-        text.append('   You ', 'bold')
-        if self.mine is None:
-            text.append('…' if not self.failed else '?', MUTED)
-        else:
-            if self.mine.quota_percent is not None:
-                percent = self.mine.quota_percent
-                text.append_text(bar(percent))
-                text.append(f' {percent}% quota', f'bold {level_colour(percent)}')
+        text.append('   ')
+        parts = [self.site] if self.site else []
+        if detail >= 1 or not self.site:
+            parts.append(None)  # all of Grid'5000
+        for index, site in enumerate(parts):
+            if index:
                 text.append(' · ', MUTED)
-            text.append(jobs_text(self.mine), GREEN)
-            if self.saved:
-                text.append(' …', MUTED)  # as last seen; the new one is on its way
-        if detail >= 1:
-            text.append('   ')
-            parts = [self.site] if self.site else []
-            if detail >= 2 or not self.site:
-                parts.append(None)  # all of Grid'5000
-            for index, site in enumerate(parts):
-                if index:
-                    text.append(' · ', MUTED)
-                usage = self.busy(site)
-                number = '?' if self.failed else '…'
-                if usage is not None:
-                    number = f'{usage.percent}%'
-                text.append(f'{site or "G5K"} ', MUTED)
-                text.append(number, 'bold' if site else MUTED)
-            text.append(' busy', MUTED)
-        if self.failed and (self.mine or self.by_site):
+            usage = self.busy(site)
+            number = '?' if self.failed else '…'
+            if usage is not None:
+                number = f'{usage.percent}%'
+            text.append(f'{site or "G5K"} ', MUTED)
+            text.append(number, 'bold' if site else MUTED)
+        text.append(' busy', MUTED)
+        if self.failed and self.by_site:
             text.append(' (old)', MUTED)  # the last try failed: these are older
         return text
