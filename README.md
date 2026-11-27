@@ -38,7 +38,7 @@ pytest
 ## Using it
 
 ```
- 1 Sites   2 Clusters   3 Nodes   4 Reservations   5 Search
+ 1 Sites   2 Clusters   3 Nodes   4 Reservations   5 Search   6 Jobs
 ```
 
 - **1 Sites → 2 Clusters → 3 Nodes**: `enter` goes down (a site's clusters, a
@@ -53,8 +53,10 @@ pytest
   `a` (or `Reserve ›`) reserves nodes: a form filled from the slot, which says
   how much of the day's quota it uses before you send it.
 - **5 Search**: the clusters of every site that meet a form of requirements.
+- **6 Jobs**: your jobs on every site. `enter` shows a job's cluster in
+  Reservations, `s` opens SSH on its machine, `x` cancels it (after asking).
 - Top right: the policy period, and how busy the site and Grid'5000 are.
-- `1`–`5` go to a tab (form fields take digits); `r` reloads the tab; `q` quits.
+- `1`–`6` go to a tab (form fields take digits); `r` reloads the tab; `q` quits.
 
 ## Layout
 

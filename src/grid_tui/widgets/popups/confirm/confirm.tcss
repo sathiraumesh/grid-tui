@@ -1,0 +1,46 @@
+/* The confirm pop-up */
+
+Confirm {
+    align: center middle;          /* the box in the middle of the screen */
+    background: #11111b 70%;       /* dim the app behind it */
+}
+
+Confirm #confirm {
+    width: 60;
+    max-width: 95%;
+    height: auto;
+    background: #181818;
+    border: round #f38ba8;         /* red: this can't be undone */
+    border-title-color: #f38ba8;
+    border-title-style: bold;
+    border-subtitle-color: #a6adc8;
+    border-subtitle-align: right;
+    padding: 1 2;
+}
+
+Confirm #confirm-details {
+    height: auto;
+    color: #cdd6f4;
+}
+
+Confirm #confirm-buttons {
+    margin-top: 1;
+    height: 1;
+    align-horizontal: right;
+}
+
+Confirm #confirm-buttons Button {
+    margin-left: 2;
+    min-width: 10;
+    background: #313244;
+    text-style: bold;
+}
+
+Confirm #confirm-buttons #yes {
+    color: #f38ba8;
+}
+
+Confirm #confirm-buttons Button:hover,
+Confirm #confirm-buttons Button:focus {
+    background: #45475a;
+}

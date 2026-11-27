@@ -4,7 +4,9 @@ It shows the jobs that run now or will, and those that ran in the last day,
 with their nodes and cores. The box under the table lists the machines of
 the job the cursor is on: Tab into it and Enter on a machine opens an SSH
 session there (s does the same for the job's first machine). Enter on a job
-shows its cluster in the Reservations tab.
+shows its cluster in the Reservations tab. The last column is a Cancel
+button: a click on it (or x on the row) cancels the job, after asking. It is
+grey, and does nothing, for a job that has finished.
 
 Jobs change all the time: the list is loaded when the tab is first shown,
 then again every few minutes while it shows (and the terminal is in front).
@@ -21,7 +23,7 @@ from typing import Any
 
 import httpx
 from rich.text import Text
-from textual import on, work
+from textual import events, on, work
 from textual.app import ComposeResult, SuspendNotSupported
 from textual.binding import Binding
 from textual.message import Message
@@ -34,6 +36,7 @@ from grid_tui.grid5000 import ApiError, Client
 from grid_tui.models import Job
 from grid_tui.policy import PARIS
 from grid_tui.utils import ssh
+from grid_tui.widgets.popups.confirm import Confirm
 
 COLUMNS = (
     'Site',
@@ -46,7 +49,10 @@ COLUMNS = (
     'Start',
     'Walltime',
     'Ends',
+    '',  # the Cancel button
 )
+CANCEL = '✕ Cancel'
+CANCEL_COLOUR = '#f38ba8'  # red: it stops the job
 DAY = 24 * 3600
 SINCE = DAY  # finished jobs are shown if they started this long ago or less
 REFRESH_SECONDS = 120  # reload this often, while the tab shows
@@ -114,9 +120,44 @@ def job_row(job: Job) -> tuple[Any, ...]:
         duration(job.walltime),
         when(ends(job)),
     )
-    return tuple(
+    texts = tuple(
         state_text(job) if cell is None else Text(cell, style=dim) for cell in cells
     )
+    return (*texts, cancel_button(job))
+
+
+def cancel_button(job: Job) -> Text:
+    """The row's Cancel button: red while the job can be cancelled, else grey."""
+    if job.is_active:
+        return Text(CANCEL, style=f'bold {CANCEL_COLOUR}')
+    return Text(CANCEL, style=f'strike {FINISHED_COLOUR}')  # disabled
+
+
+class JobsTable(DataTable):
+    """The jobs table: a click on a row's Cancel cell is a cancel, not a choice."""
+
+    class CancelClicked(Message):
+        """The Cancel cell of a row was clicked."""
+
+        def __init__(self, key: str) -> None:
+            """Make the message.
+
+            Args:
+                key: The row's key, 'site/uid'.
+            """
+            super().__init__()
+            self.key = key
+
+    async def _on_click(self, event: events.Click) -> None:
+        """A click on the last column cancels; anywhere else is as usual."""
+        meta = event.style.meta
+        row, column = meta.get('row', -1), meta.get('column', -1)
+        if row >= 0 and column == len(self.ordered_columns) - 1:
+            event.stop()
+            self.move_cursor(row=row)
+            self.post_message(self.CancelClicked(self.ordered_rows[row].key.value))
+            return
+        await super()._on_click(event)
 
 
 def machine_order(name: str) -> tuple:
@@ -165,7 +206,11 @@ class JobsPanel(Widget):
     """A table of your jobs on every site: running, waiting, and recent."""
 
     DEFAULT_CSS = (Path(__file__).parent / 'jobs.tcss').read_text()
-    BINDINGS = [Binding('s', 'ssh', 'SSH to machine')]
+    BINDINGS = [
+        Binding('s', 'ssh', 'SSH to machine'),
+        Binding('x', 'cancel_job', 'Cancel job'),
+        Binding('delete', 'cancel_job', 'Cancel job', show=False),
+    ]
 
     class Chosen(Message):
         """Sent when a job with nodes is chosen (Enter, or a click)."""
@@ -204,7 +249,7 @@ class JobsPanel(Widget):
     def compose(self) -> ComposeResult:
         """A line saying how many jobs there are, the table, then its machines."""
         yield Label('', id='jobs-status')
-        yield DataTable(cursor_type='row', zebra_stripes=True)
+        yield JobsTable(cursor_type='row', zebra_stripes=True)
         yield OptionList(id='job-machines')
 
     def on_mount(self) -> None:
@@ -355,6 +400,73 @@ class JobsPanel(Widget):
                 title=f"Couldn't connect to {machine}",
                 severity='error',
             )
+
+    # ---- cancelling -----------------------------------------------------------
+
+    @on(JobsTable.CancelClicked)
+    def _cancel_clicked(self, event: JobsTable.CancelClicked) -> None:
+        """A row's Cancel button was clicked: as x on that row; a grey one
+        (a finished job) does nothing."""
+        job = self.jobs.get(event.key)
+        if job is not None and job.is_active:
+            self.ask_to_cancel(job)
+
+    def action_cancel_job(self) -> None:
+        """Cancel the job the cursor is on, once you say yes (x, or Delete)."""
+        job = self.current
+        if job is None:
+            return
+        if not job.is_active:
+            self.notify(
+                'It has already finished.',
+                title=f"Can't cancel #{job.uid}",
+                severity='warning',
+            )
+            return
+        self.ask_to_cancel(job)
+
+    def ask_to_cancel(self, job: Job) -> None:
+        """Ask whether to cancel job; on yes, cancel it."""
+        where = f'{job.cluster or job.site}'
+        if job.is_running:
+            details = Text.assemble(
+                ('It is running', 'bold'),
+                f' on {number(len(job.assigned_nodes))} node(s) of {where}: ',
+                'it stops now, and whatever runs on its nodes is lost.',
+            )
+        else:
+            start = when(job.started_at) or 'its start'
+            details = Text.assemble(
+                ('It is waiting', 'bold'),
+                f' for {start}: its nodes are given back.',
+            )
+
+        def answered(yes: bool | None) -> None:
+            if yes:
+                self.cancel_job(job)
+
+        self.app.push_screen(
+            Confirm(
+                f'Cancel job #{job.uid} on {job.site}?',
+                details,
+                yes='Cancel job',
+                no='Keep it',
+            ),
+            answered,
+        )
+
+    @work(group='jobs-cancel')
+    async def cancel_job(self, job: Job) -> None:
+        """Cancel the job on its site, say how it went, and reload."""
+        try:
+            await self.client.jobs.cancel(job.site, job.uid)
+        except (ApiError, httpx.HTTPError) as error:
+            self.notify(
+                str(error), title=f"Couldn't cancel #{job.uid}", severity='error'
+            )
+            return
+        self.notify(f'#{job.uid} on {job.site} is being stopped.', title='Cancelled')
+        self.load(refresh=True)
 
     @on(DataTable.RowSelected)
     def _job_chosen(self, event: DataTable.RowSelected) -> None:

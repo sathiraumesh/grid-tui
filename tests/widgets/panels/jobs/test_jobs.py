@@ -3,6 +3,7 @@
 from contextlib import nullcontext
 from datetime import datetime
 
+import httpx
 import pytest
 from textual.app import App, ComposeResult, SuspendNotSupported
 from textual.pilot import Pilot
@@ -14,9 +15,12 @@ from grid_tui.policy import PARIS
 from grid_tui.utils import ssh
 from grid_tui.widgets.panels.jobs import JobsPanel
 from grid_tui.widgets.panels.jobs.jobs import (
+    CANCEL_COLOUR,
     COLUMNS,
     NO_LOGIN,
     NONE,
+    JobsTable,
+    cancel_button,
     ends,
     machine_order,
     machines,
@@ -26,6 +30,7 @@ from grid_tui.widgets.panels.jobs.jobs import (
     summary,
     when,
 )
+from grid_tui.widgets.popups.confirm import Confirm
 from tests.grid5000.fakes import SITES, fake_client, fake_grid5000
 from tests.widgets.panels.helpers import settle
 
@@ -151,6 +156,7 @@ async def test_a_running_jobs_row() -> None:
             'Thu 11:00',
             '2 h',
             'Thu 13:00',
+            '✕ Cancel',
         ]
 
 
@@ -493,3 +499,120 @@ def test_a_finished_job_with_no_machines() -> None:
     """A finished job that never ran on any machine says so."""
     title, text = machines_text(job(uid=5, state='error'))
     assert (title, text) == ('Machines of #5', 'None: the job never ran on any.')
+
+
+# Cancelling a job
+
+
+def cancelling_client(sent: list, jobs: dict | None = None) -> Client:
+    """alice's jobs on the fake API, which also takes DELETEs."""
+    fake = fake_grid5000(SITES, jobs=JOBS if jobs is None else jobs)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        if request.method == 'DELETE':
+            return httpx.Response(202, json={})
+        return fake.handler(request)
+
+    return Client(user='alice', transport=httpx.MockTransport(handle))
+
+
+async def cursor_on(app: App, pilot: Pilot, uid: int) -> None:
+    """Show the jobs, and put the cursor on job uid."""
+    await shown(app, pilot)
+    t = table(app)
+    t.focus()
+    row = next(i for i in range(t.row_count) if str(t.get_row_at(i)[1]) == f'#{uid}')
+    t.move_cursor(row=row)
+    await settle(app, pilot)
+
+
+async def test_x_asks_then_cancels_the_job() -> None:
+    """x on the waiting job: a question; yes sends DELETE and reloads."""
+    sent: list = []
+    app = JobsApp(cancelling_client(sent))
+    async with app.run_test(size=(140, 30)) as pilot:
+        await cursor_on(app, pilot, 2)
+        await pilot.press('x')
+        await settle(app, pilot)
+        assert isinstance(app.screen, Confirm)
+        assert '#2' in str(app.screen.question)
+        sent.clear()
+        await pilot.click('#yes')
+        await settle(app, pilot)
+        deletes = [r for r in sent if r.method == 'DELETE']
+        assert [r.url.path for r in deletes] == ['/stable/sites/nancy/jobs/2']
+        assert any(r.method == 'GET' for r in sent)  # the list again
+
+
+async def test_saying_no_keeps_the_job() -> None:
+    """x, then Esc: nothing is sent."""
+    sent: list = []
+    app = JobsApp(cancelling_client(sent))
+    async with app.run_test(size=(140, 30)) as pilot:
+        await cursor_on(app, pilot, 1)
+        await pilot.press('x')
+        await settle(app, pilot)
+        await pilot.press('escape')
+        await settle(app, pilot)
+        assert not isinstance(app.screen, Confirm)
+        assert not [r for r in sent if r.method == 'DELETE']
+
+
+async def test_a_finished_job_cant_be_cancelled() -> None:
+    """x on a finished job: no question, nothing sent."""
+    sent: list = []
+    app = JobsApp(cancelling_client(sent))
+    async with app.run_test(size=(140, 30)) as pilot:
+        await cursor_on(app, pilot, 3)
+        await pilot.press('x')
+        await settle(app, pilot)
+        assert not isinstance(app.screen, Confirm)
+        assert not [r for r in sent if r.method == 'DELETE']
+
+
+def test_the_cancel_button_is_red_until_the_job_ends() -> None:
+    """Red while the job can be cancelled; grey and struck out once it ended."""
+    running = Job.from_api(RUNNING, 'nancy')
+    finished = Job.from_api(FINISHED, 'lyon')
+    assert CANCEL_COLOUR in str(cancel_button(running).style)
+    assert 'strike' in str(cancel_button(finished).style)
+    assert CANCEL_COLOUR not in str(cancel_button(finished).style)
+
+
+async def click_cancel(app: App, pilot: Pilot, uid: int) -> None:
+    """Click the Cancel cell of job uid's row."""
+    t = table(app)
+    row = next(i for i in range(t.row_count) if str(t.get_row_at(i)[1]) == f'#{uid}')
+    # the Cancel column starts after every other column (and their padding)
+    columns = list(t.columns.values())
+    x = sum(c.get_render_width(t) for c in columns[:-1]) + 2
+    await pilot.click(JobsTable, offset=(x, row + 1))  # + 1: the header
+    await settle(app, pilot)
+
+
+async def test_clicking_cancel_asks_then_cancels() -> None:
+    """A click on the waiting job's Cancel: the question; yes sends DELETE."""
+    sent: list = []
+    app = JobsApp(cancelling_client(sent))
+    async with app.run_test(size=(140, 30)) as pilot:
+        await shown(app, pilot)
+        await click_cancel(app, pilot, 2)
+        assert isinstance(app.screen, Confirm)
+        assert '#2' in app.screen.question
+        await pilot.click('#yes')
+        await settle(app, pilot)
+        deletes = [r.url.path for r in sent if r.method == 'DELETE']
+        assert deletes == ['/stable/sites/nancy/jobs/2']
+        assert app.chosen == []  # the click didn't open the job
+
+
+async def test_a_grey_cancel_does_nothing() -> None:
+    """A click on a finished job's Cancel: no question, nothing sent."""
+    sent: list = []
+    app = JobsApp(cancelling_client(sent))
+    async with app.run_test(size=(140, 30)) as pilot:
+        await shown(app, pilot)
+        await click_cancel(app, pilot, 3)
+        assert not isinstance(app.screen, Confirm)
+        assert not [r for r in sent if r.method == 'DELETE']
