@@ -1,4 +1,8 @@
-"""The Nodes panel: a table of a cluster's nodes and their hardware."""
+"""The Nodes panel: a table of a cluster's nodes and their hardware.
+
+The cluster is picked with the Site and Cluster lists at the top, or comes
+from another tab (Enter on a cluster in Clusters or Search).
+"""
 
 import asyncio
 from pathlib import Path
@@ -7,15 +11,16 @@ from typing import Any
 import httpx
 from textual import on, work
 from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.widget import Widget
-from textual.widgets import DataTable, Label
+from textual.widgets import DataTable, Label, Select
 
 from grid_tui.format import number, size
 from grid_tui.grid5000 import ApiError, Client
 from grid_tui.models import Cluster, MetricInfo, Node
 from grid_tui.widgets.popups.node_details import NodeDetails
 
-HINT = 'Choose a cluster in the Clusters tab (Enter) to see its nodes.'
+HINT = 'Choose a site and a cluster to see its nodes.'
 COLUMNS = ('Node', 'CPU', 'GHz', 'Cores', 'Threads', 'RAM', 'Disks', 'Network', 'GPUs')
 
 
@@ -90,15 +95,26 @@ class NodesPanel(Widget):
         self.cluster = cluster
         self.nodes: dict[str, Node] = {}  # the nodes in the table, by uid
         self.cluster_info: Cluster | None = None  # the cluster, for its metrics
+        self._sites: set[str] = set()  # the sites the site list has
 
     def compose(self) -> ComposeResult:
-        """The panel's widgets: which cluster it is, then the table of nodes."""
-        yield Label(HINT, id='nodes-title')
+        """The panel's widgets: the site and cluster lists, then the nodes."""
+        with Horizontal(id='nodes-toolbar'):
+            yield Label('Site', classes='form-label')
+            yield Select(
+                [], prompt='Site', allow_blank=True, compact=True, id='nodes-site'
+            )
+            yield Label('Cluster', classes='form-label')
+            yield Select(
+                [], prompt='Cluster', allow_blank=True, compact=True, id='nodes-cluster'
+            )
+            yield Label(HINT, id='nodes-title')
         yield DataTable(cursor_type='row', zebra_stripes=True)
 
     def on_mount(self) -> None:
         """Add the columns, and load if a cluster was given."""
         self.query_one(DataTable).add_columns(*COLUMNS)
+        self.load_sites()
         self.load()
 
     def show_cluster(self, site: str, cluster: str) -> None:
@@ -108,9 +124,67 @@ class NodesPanel(Widget):
             site: The cluster's site, e.g. 'nancy'.
             cluster: The cluster, e.g. 'gros'.
         """
+        if (site, cluster) == (self.site, self.cluster):
+            return
         self.site = site
         self.cluster = cluster
+        sites = self.query_one('#nodes-site', Select)
+        with sites.prevent(Select.Changed):
+            if site in self._sites:
+                sites.value = site
+        self.load_clusters(site)
         self.load()
+
+    # ---- choosing the cluster -----------------------------------------------
+
+    @work(group='nodes-sites')
+    async def load_sites(self) -> None:
+        """Fill the site list (from the cache once it's saved)."""
+        try:
+            sites = await self.client.sites.list()
+        except (ApiError, httpx.HTTPError):
+            return  # the table says what went wrong when it loads
+        select = self.query_one('#nodes-site', Select)
+        self._sites = {site.uid for site in sites}
+        with select.prevent(Select.Changed):
+            select.set_options((site.name or site.uid, site.uid) for site in sites)
+            if self.site in self._sites:
+                select.value = self.site
+        if self.site:
+            self.load_clusters(self.site)
+
+    @work(exclusive=True, group='nodes-clusters')
+    async def load_clusters(self, site: str) -> None:
+        """Fill the cluster list with a site's clusters."""
+        try:
+            clusters = await self.client.sites.list_clusters(site)
+        except (ApiError, httpx.HTTPError):
+            return
+        select = self.query_one('#nodes-cluster', Select)
+        uids = [cluster.uid for cluster in clusters]
+        with select.prevent(Select.Changed):
+            select.set_options((uid, uid) for uid in uids)
+            if site == self.site and self.cluster in uids:
+                select.value = self.cluster
+
+    @on(Select.Changed, '#nodes-site')
+    def _site_picked(self, event: Select.Changed) -> None:
+        """A site was picked: list its clusters (the table waits for one)."""
+        site = event.select.selection
+        if site and site != self.site:
+            self.site, self.cluster = site, None
+            self.load_clusters(site)
+            self.load()
+
+    @on(Select.Changed, '#nodes-cluster')
+    def _cluster_picked(self, event: Select.Changed) -> None:
+        """A cluster was picked: show its nodes."""
+        cluster = event.select.selection
+        if self.site and cluster and cluster != self.cluster:
+            self.cluster = cluster
+            self.load()
+
+    # ---- the nodes ----------------------------------------------------------
 
     def _show_title(self) -> None:
         """Say which cluster is shown, or how to choose one."""

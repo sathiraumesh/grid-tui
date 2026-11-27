@@ -4,9 +4,45 @@ NodesPanel {
     height: 1fr;
 }
 
-NodesPanel #nodes-title {
+/* The site and cluster lists, then which cluster it is: one row */
+
+NodesPanel #nodes-toolbar {
     height: 1;
     margin-bottom: 1;
+}
+
+NodesPanel .form-label {
+    width: auto;
+    padding: 0 1;
+    color: #a6adc8;
+}
+
+NodesPanel #nodes-toolbar Select {
+    width: 20;
+    margin-right: 2;
+}
+
+NodesPanel Select > SelectCurrent {
+    background: #313244;
+    padding: 0 1;
+}
+
+NodesPanel Select:focus > SelectCurrent {
+    background: #45475a;           /* a bit lighter when it has focus */
+}
+
+NodesPanel Select > SelectCurrent .arrow {
+    color: #fab387;                /* orange arrow */
+}
+
+NodesPanel Select > SelectOverlay {
+    border: round #fab387;
+    background: #313244;
+}
+
+NodesPanel #nodes-title {
+    width: auto;
+    padding-left: 2;
     color: #a6adc8;
 }
 

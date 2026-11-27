@@ -217,3 +217,51 @@ def test_gpus_of_different_models_are_listed() -> None:
 def test_a_node_with_no_hardware_has_empty_cells() -> None:
     """A node the API says nothing about is its name and empty cells."""
     assert row(Node(uid='x')) == ('x', '', '', '', '', '', '', '', '')
+
+
+# Choosing the cluster with the lists
+
+
+async def test_the_lists_offer_every_site_and_its_clusters() -> None:
+    """The site list has every site; picking nancy lists nancy's clusters."""
+    from textual.widgets import Select
+
+    app = NodesApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        sites = app.query_one('#nodes-site', Select)
+        assert [value for _, value in sites._options[1:]] == ['nancy', 'lyon']
+        sites.value = 'nancy'
+        await settle(app, pilot)
+        clusters = app.query_one('#nodes-cluster', Select)
+        assert [value for _, value in clusters._options[1:]] == ['gros', 'grisou']
+
+
+async def test_picking_a_cluster_shows_its_nodes() -> None:
+    """Site nancy, then cluster gros: gros's nodes and the title."""
+    from textual.widgets import Select
+
+    app = NodesApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        app.query_one('#nodes-site', Select).value = 'nancy'
+        await settle(app, pilot)
+        app.query_one('#nodes-cluster', Select).value = 'gros'
+        await settle(app, pilot)
+        panel = app.query_one(NodesPanel)
+        assert (panel.site, panel.cluster) == ('nancy', 'gros')
+        assert rows(panel.query_one(DataTable))[0][0] == 'gros-1'
+        assert str(app.query_one('#nodes-title', Label).render()) == 'nancy / gros'
+
+
+async def test_a_cluster_from_another_tab_shows_in_the_lists() -> None:
+    """show_cluster (Enter in Clusters) puts the site and cluster in the lists."""
+    from textual.widgets import Select
+
+    app = NodesApp(g5k_client())
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        app.query_one(NodesPanel).show_cluster('nancy', 'grisou')
+        await settle(app, pilot)
+        assert app.query_one('#nodes-site', Select).value == 'nancy'
+        assert app.query_one('#nodes-cluster', Select).value == 'grisou'
