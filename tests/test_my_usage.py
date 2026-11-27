@@ -9,6 +9,7 @@ from grid_tui.my_usage import (
     counts_toward_quota,
     daytime_core_seconds,
     my_usage,
+    planned_quota,
 )
 from grid_tui.policy import PARIS
 from tests.grid5000.fakes import NODES, SITES, fake_grid5000
@@ -151,3 +152,33 @@ async def test_my_usage_on_one_site() -> None:
     client = client_with([answer()])
     assert (await my_usage(client, THURSDAY, 'lyon')).jobs == 0
     assert (await my_usage(client, THURSDAY, 'nancy')).quota_percent == 50
+
+
+# What a planned reservation would use
+
+
+def test_planned_quota_on_a_working_day() -> None:
+    """1 of gros's 2 nodes (18 of 36 cores) for 2 h from 10:00: half the quota."""
+    assert planned_quota(1, 18, 36, at(10), 2 * 3600, submitted=at(9)) == 50
+
+
+def test_planned_quota_counts_only_daytime() -> None:
+    """From 18:00 for 3 h: only 18:00-19:00 counts (1 h of the 2 h quota)."""
+    assert planned_quota(2, 18, 36, at(18), 3 * 3600, submitted=at(9)) == 50
+
+
+def test_planned_quota_at_night_is_none_used() -> None:
+    """From 20:00 to 23:00: outside daytime, 0%."""
+    assert planned_quota(2, 18, 36, at(20), 3 * 3600, submitted=at(9)) == 0
+
+
+def test_planned_quota_over_two_days_gives_the_worst_day() -> None:
+    """Thursday 18:00 to Friday 11:00: 1 h on Thursday, 2 h on Friday."""
+    days = planned_quota(2, 18, 36, at(18), 17 * 3600, submitted=at(9))
+    assert days == 100  # Friday 09:00-11:00 on every core
+
+
+def test_planned_quota_exceptions() -> None:
+    """Sent from 17:00, or short and sent just before: it doesn't count."""
+    assert planned_quota(2, 18, 36, at(17, 30), 3600 * 4, submitted=at(17)) is None
+    assert planned_quota(2, 18, 36, at(10, 5), 3600, submitted=at(10)) is None

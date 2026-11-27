@@ -45,10 +45,11 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import DataTable, Input, Label, Select, Static
+from textual.widgets import Button, DataTable, Input, Label, Select, Static
 
 from grid_tui.format import duration
 from grid_tui.grid5000 import ApiError, Client
+from grid_tui.grid5000.jobs import job_request
 from grid_tui.models import Reservation, Schedule
 from grid_tui.policy import PARIS, period_at
 from grid_tui.widgets.panels.reservations.timeline import (
@@ -68,6 +69,10 @@ from grid_tui.widgets.panels.reservations.timeline import (
     policy_band,
     slot_line,
     with_now,
+)
+from grid_tui.widgets.popups.new_reservation import (
+    NewReservation,
+    ReservationRequest,
 )
 
 HINT = 'Choose a site and a cluster to see its reservations.'
@@ -132,6 +137,7 @@ class ReservationsPanel(Widget):
         Binding('left_square_bracket', 'pan(-1)', 'Earlier'),
         Binding('right_square_bracket', 'pan(1)', 'Later'),
         Binding('n', 'now', 'Now'),
+        Binding('a', 'reserve', 'Reserve'),
         Binding('d', 'view(24)', 'Day'),
         Binding('w', 'view(168)', 'Week'),
         Binding('m', 'view(720)', 'Month'),
@@ -206,6 +212,7 @@ class ReservationsPanel(Widget):
             with Horizontal(id='res-toolbar'):
                 yield Label(HINT, id='res-title')
                 yield Label('', id='res-zoom')
+                yield Button('Reserve ›', compact=True, id='res-reserve')
             yield Static('', id='res-summary')
         with Vertical(id='timeline-card') as card:
             card.border_title = LEGEND
@@ -367,6 +374,85 @@ class ReservationsPanel(Widget):
             self.slot = None
             return
         self.slot = self.schedule.find_slot(nodes, seconds, self.now())
+
+    # ---- reserving ----------------------------------------------------------
+
+    @on(Button.Pressed, '#res-reserve')
+    def action_reserve(self) -> None:
+        """Open the new reservation form for the cluster (a, or Reserve ›)."""
+        if not (self.site and self.cluster):
+            self.notify('Choose a site and a cluster first.', severity='warning')
+            return
+        if not self.client.jobs.user:
+            self.notify(
+                "Reserving needs your Grid'5000 login (G5K_USER, G5K_PASSWORD).",
+                title="Can't reserve",
+                severity='error',
+            )
+            return
+        self.open_form(self.site, self.cluster)
+
+    @work(group='res-form')
+    async def open_form(self, site: str, cluster: str) -> None:
+        """Fill the form from the slot finder and the cluster's cores, and open it.
+
+        The nodes are cached, so the cores cost no request after the first time.
+        """
+        nodes, seconds = self.slot_request()
+        start = None
+        if self.slot is not None and self.slot[0] > self.now():
+            start = self.slot[0]  # the first slot found
+        try:
+            hardware = await self.client.nodes.list(site, cluster)
+        except (ApiError, httpx.HTTPError):
+            hardware = []  # the form says it can't tell the quota
+        cores = [node.architecture.nb_cores for node in hardware]
+        form = NewReservation(
+            site,
+            cluster,
+            nodes=nodes or 1,
+            seconds=seconds or 3600,
+            start=start,
+            node_cores=max(cores, default=0),
+            cluster_cores=sum(cores),
+            free_nodes=self.schedule.up if self.schedule is not None else 0,
+            now=self.now,
+        )
+
+        def sent(request: ReservationRequest | None) -> None:
+            if request is not None:
+                self.reserve(site, cluster, request)
+
+        self.app.push_screen(form, sent)
+
+    @work(group='res-submit')
+    async def reserve(
+        self, site: str, cluster: str, request: ReservationRequest
+    ) -> None:
+        """Send the reservation to the site, say how it went, and reload."""
+        job = job_request(
+            cluster,
+            request.nodes,
+            request.seconds,
+            start=request.start,
+            name=request.name,
+            deploy=request.deploy,
+        )
+        try:
+            uid = await self.client.jobs.submit(site, job)
+        except (ApiError, httpx.HTTPError) as error:
+            self.notify(str(error), title="Couldn't reserve", severity='error')
+            return
+        start = (
+            'as soon as they are free' if request.start is None else when(request.start)
+        )
+        self.notify(
+            f'{request.nodes} × {cluster} for {duration(int(request.seconds))}, '
+            f'{start}.',
+            title=f'Reserved: job {uid}',
+        )
+        if (site, cluster) == (self.site, self.cluster):
+            self.load(refresh=True)
 
     # ---- moving through time ------------------------------------------------
 

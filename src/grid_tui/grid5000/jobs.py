@@ -1,4 +1,5 @@
-"""Your jobs: GET /sites/{site}/jobs?user=you, and one job's details.
+"""Your jobs: GET /sites/{site}/jobs?user=you, and one job's details; and
+new reservations (POST /sites/{site}/jobs) and cancelling one (DELETE).
 
 Not cached while a job can still change; a finished job's details are.
 """
@@ -7,15 +8,62 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from typing import Any
 from urllib.parse import quote
 
 from grid_tui.grid5000.base import BaseClient
 from grid_tui.models.job import Job
 from grid_tui.models.site import Site
+from grid_tui.policy import PARIS
 
 # the states worth reading: what runs or will, and what ran (for today's quota)
 STATES = 'running,launching,waiting,terminated,error'
 FRESH_FOR = 240  # seconds your jobs list (and a running job) is remembered
+# what a reserved job runs: nothing, until its walltime ends; you log in to
+# its nodes (ssh, or oarsub -C) and work there
+HOLD = 'sleep infinity'
+
+
+def walltime(seconds: float) -> str:
+    """OAR's walltime: 5400 → '1:30:00'; at least a minute."""
+    total = max(int(round(seconds)), 60)
+    hours, rest = divmod(total, 3600)
+    return f'{hours}:{rest // 60:02}:{rest % 60:02}'
+
+
+def job_request(
+    cluster: str,
+    nodes: int,
+    seconds: float,
+    *,
+    start: float | None = None,
+    name: str = '',
+    deploy: bool = False,
+) -> dict[str, Any]:
+    """The JSON of a new job: nodes of a cluster, for a time, now or later.
+
+    Args:
+        cluster: The cluster, e.g. 'gros'.
+        nodes: How many nodes.
+        seconds: For how long (the walltime).
+        start: When it starts, in seconds since 1970 (an advance
+            reservation); None for as soon as they are free.
+        name: A name for it, if any.
+        deploy: Reserve the nodes to deploy your own system on (kadeploy).
+    """
+    request: dict[str, Any] = {
+        'resources': f'nodes={nodes},walltime={walltime(seconds)}',
+        'properties': f"cluster='{cluster}'",
+        'command': HOLD,
+    }
+    if start is not None:
+        moment = datetime.fromtimestamp(start, PARIS)  # OAR reads Paris time
+        request['reservation'] = moment.strftime('%Y-%m-%d %H:%M:%S')
+    if name:
+        request['name'] = name
+    if deploy:
+        request['types'] = ['deploy']
+    return request
 
 
 class JobsClient(BaseClient):
@@ -45,6 +93,26 @@ class JobsClient(BaseClient):
             if saved is not None:
                 return Job.from_api(saved, job.site)
         return await self.get(job.site, job.uid)
+
+    async def submit(self, site: str, request: dict[str, Any]) -> int:
+        """Send a new job (see job_request) and return its uid.
+
+        What's remembered about the site (its reservations, your jobs) is
+        forgotten, so the next look shows the new job.
+
+        Raises:
+            ApiError: The API refused it; .detail says why, if it said.
+        """
+        site_path = f'/sites/{quote(site, safe="")}'
+        answer = await self.connection.send('POST', f'{site_path}/jobs', request)
+        self.connection.forget(f'{site_path}/')
+        return int((answer or {}).get('uid') or 0)
+
+    async def cancel(self, site: str, uid: int) -> None:
+        """Cancel a job of yours (it is stopped if it runs)."""
+        site_path = f'/sites/{quote(site, safe="")}'
+        await self.connection.send('DELETE', f'{site_path}/jobs/{uid}')
+        self.connection.forget(f'{site_path}/')
 
     async def mine_today(
         self, since: datetime, site: str | None = None, *, refresh: bool = False

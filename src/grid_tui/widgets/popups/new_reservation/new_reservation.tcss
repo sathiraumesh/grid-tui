@@ -1,0 +1,78 @@
+/* The new reservation pop-up */
+
+NewReservation {
+    align: center middle;          /* the box in the middle of the screen */
+    background: #11111b 70%;       /* dim the app behind it */
+}
+
+NewReservation #new-res {
+    width: 72;
+    max-width: 95%;
+    height: auto;
+    background: #181818;
+    border: round #fab387;
+    border-title-color: #fab387;
+    border-title-style: bold;
+    border-subtitle-color: #a6adc8;
+    border-subtitle-align: right;
+    padding: 1 2;
+}
+
+NewReservation #new-res-form {
+    grid-size: 2;
+    grid-columns: 8 1fr;
+    grid-rows: 1;
+    grid-gutter: 1 1;
+    height: auto;
+}
+
+NewReservation .form-label {
+    color: #a6adc8;
+}
+
+NewReservation Input {
+    background: #313244;
+    width: 22;                     /* room for 2026-11-27 16:00 */
+}
+
+NewReservation #new-nodes,
+NewReservation #new-hours {
+    width: 8;
+}
+
+NewReservation #new-name {
+    width: 30;
+}
+
+NewReservation Input:focus {
+    background: #45475a;
+}
+
+NewReservation #new-cost {
+    margin-top: 1;
+    padding: 0 1;
+    height: auto;
+    background: #232323;           /* a quiet box for what it costs */
+}
+
+NewReservation #new-buttons {
+    margin-top: 1;
+    height: 1;
+    align-horizontal: right;
+}
+
+NewReservation #new-buttons Button {
+    margin-left: 2;
+    min-width: 10;
+    background: #313244;
+    text-style: bold;
+}
+
+NewReservation #new-buttons #reserve {
+    color: #a6e3a1;                /* green: it makes something */
+}
+
+NewReservation #new-buttons Button:hover,
+NewReservation #new-buttons Button:focus {
+    background: #45475a;
+}

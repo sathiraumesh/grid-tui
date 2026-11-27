@@ -1,8 +1,13 @@
 """Tests for JobsClient: your jobs, and their details."""
 
+import json
 from datetime import datetime
 
-from grid_tui.grid5000 import Cache, JobsClient
+import httpx
+import pytest
+
+from grid_tui.grid5000 import ApiError, Cache, JobsClient
+from grid_tui.grid5000.jobs import job_request, walltime
 from grid_tui.policy import PARIS
 from tests.grid5000.fakes import SITES, fake_grid5000
 
@@ -85,3 +90,90 @@ async def test_mine_today_on_one_site() -> None:
     jobs = await client(seen).mine_today(MIDNIGHT, 'lyon')
     assert jobs == []
     assert not any('/nancy/' in r.url.path for r in seen)
+
+
+# Reserving: a new job, and cancelling one
+
+
+def test_walltime() -> None:
+    """Seconds as OAR's H:MM:SS; at least a minute."""
+    assert walltime(5400) == '1:30:00'
+    assert walltime(36 * 3600 + 61) == '36:01:01'
+    assert walltime(5) == '0:01:00'
+
+
+def test_job_request_now() -> None:
+    """Nodes of one cluster, for a time, holding them with sleep."""
+    assert job_request('gros', 2, 3600) == {
+        'resources': 'nodes=2,walltime=1:00:00',
+        'properties': "cluster='gros'",
+        'command': 'sleep infinity',
+    }
+
+
+def test_job_request_later_named_for_deploy() -> None:
+    """A start is an advance reservation, in Paris time; name and deploy go in."""
+    start = datetime(2026, 11, 26, 20, 30, tzinfo=PARIS).timestamp()
+    request = job_request('gros', 1, 7200, start=start, name='exp', deploy=True)
+    assert request['reservation'] == '2026-11-26 20:30:00'
+    assert request['name'] == 'exp'
+    assert request['types'] == ['deploy']
+
+
+def posting_client(
+    sent: list, status: int = 201, answer: dict | None = None
+) -> JobsClient:
+    """A JobsClient whose fake API keeps every request, and answers a POST or
+    DELETE with status (a GET as fake_grid5000 does)."""
+    fake = fake_grid5000(SITES, jobs={'nancy': [], 'lyon': []})
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        if request.method in ('POST', 'DELETE'):
+            return httpx.Response(status, json=answer or {})
+        return fake.handler(request)
+
+    return JobsClient(user='alice', transport=httpx.MockTransport(handle))
+
+
+async def test_submit_posts_the_job_and_returns_its_uid() -> None:
+    """POST /sites/nancy/jobs with the JSON; the answer's uid comes back."""
+    sent: list = []
+    jobs = posting_client(sent, answer={'uid': 4242})
+    uid = await jobs.submit('nancy', job_request('gros', 2, 3600))
+    assert uid == 4242
+    post = sent[-1]
+    assert (post.method, post.url.path) == ('POST', '/stable/sites/nancy/jobs')
+    assert json.loads(post.content)['resources'] == 'nodes=2,walltime=1:00:00'
+
+
+async def test_submit_forgets_what_was_remembered_about_the_site() -> None:
+    """After reserving, your jobs list is asked for again, not remembered."""
+    sent: list = []
+    jobs = posting_client(sent, answer={'uid': 1})
+    await jobs.mine('nancy')
+    await jobs.mine('nancy')
+    assert len(sent) == 1  # remembered
+    await jobs.submit('nancy', job_request('gros', 1, 3600))
+    await jobs.mine('nancy')
+    assert [r.method for r in sent] == ['GET', 'POST', 'GET']
+
+
+async def test_a_refused_job_says_why() -> None:
+    """A 400 with a message: the error carries the API's reason."""
+    jobs = posting_client([], status=400, answer={'message': 'walltime too long'})
+    with pytest.raises(ApiError) as caught:
+        await jobs.submit('nancy', job_request('gros', 1, 3600))
+    assert caught.value.detail == 'walltime too long'
+    assert str(caught.value).startswith('POST /sites/nancy/jobs: 400')
+    assert 'walltime too long' in str(caught.value)
+
+
+async def test_cancel_deletes_the_job() -> None:
+    """DELETE /sites/nancy/jobs/42."""
+    sent: list = []
+    await posting_client(sent, status=202).cancel('nancy', 42)
+    assert (sent[-1].method, sent[-1].url.path) == (
+        'DELETE',
+        '/stable/sites/nancy/jobs/42',
+    )

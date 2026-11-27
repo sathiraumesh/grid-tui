@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from grid_tui.grid5000 import Client
 from grid_tui.models.job import Job
@@ -131,3 +131,50 @@ async def my_usage(
         quota_cluster=worst,
         by_cluster=by_cluster,
     )
+
+
+def planned_quota(
+    nodes: int,
+    node_cores: int,
+    cluster_cores: int,
+    start: float,
+    seconds: float,
+    submitted: float,
+) -> int | None:
+    """How much of a day's quota a reservation would use, on its worst day.
+
+    The quota is per cluster and per day, so a reservation over several days
+    is measured day by day, and the most used day is given.
+
+    Args:
+        nodes: How many nodes it reserves.
+        node_cores: The cores of each node.
+        cluster_cores: All the cluster's cores (the quota is 2 h on them all).
+        start: When it starts, in seconds since 1970.
+        seconds: How long it lasts.
+        submitted: When it is sent (now): a job sent from 17:00, or a short
+            one sent just before it starts, doesn't count.
+
+    Returns:
+        The percentage of the quota, e.g. 45; 0 if it doesn't touch daytime;
+        None if it doesn't count at all (one of the policy's exceptions).
+    """
+    sent = datetime.fromtimestamp(submitted, PARIS)
+    if sent.time() >= FREE_AFTER and is_working_day(sent.date()):
+        return None
+    if seconds <= SHORT_JOB and start - submitted < LATE_SUBMIT:
+        return None
+    if cluster_cores <= 0:
+        return 0
+    end = start + seconds
+    day = datetime.fromtimestamp(start, PARIS).date()
+    last = datetime.fromtimestamp(end, PARIS).date()
+    worst = 0.0
+    while day <= last:
+        if is_working_day(day):
+            opens = datetime.combine(day, DAY_START, tzinfo=PARIS).timestamp()
+            closes = datetime.combine(day, DAY_END, tzinfo=PARIS).timestamp()
+            worst = max(worst, min(end, closes) - max(start, opens))
+        day += timedelta(days=1)
+    share = 100 * worst * nodes * node_cores / (QUOTA_SECONDS * cluster_cores)
+    return round(share)

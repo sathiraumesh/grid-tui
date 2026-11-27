@@ -50,6 +50,8 @@ pytest
   side, time across, an orange line for now, the daytime-quota hours shaded.
   Set *nodes* and *hours* to find the next free slot. `z` zooms (12 h to 7 days),
   `[` `]` move earlier and later, `n` comes back to now.
+  `a` (or `Reserve ›`) reserves nodes: a form filled from the slot, which says
+  how much of the day's quota it uses before you send it.
 - **5 Search**: the clusters of every site that meet a form of requirements.
 - Top right: the policy period, and how busy the site and Grid'5000 are.
 - `1`–`5` go to a tab (form fields take digits); `r` reloads the tab; `q` quits.

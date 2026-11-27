@@ -1,5 +1,8 @@
 """Tests for the Reservations panel: the timeline of a cluster on screen."""
 
+import json
+
+import httpx
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Input, Label, Select, Static
 
@@ -9,6 +12,7 @@ from grid_tui.widgets.main_tabs import MainTabs
 from grid_tui.widgets.panels.clusters import ClusterPanel
 from grid_tui.widgets.panels.reservations import ReservationsPanel
 from grid_tui.widgets.panels.reservations.reservations import HINT, view_name
+from grid_tui.widgets.popups.new_reservation import NewReservation
 from tests.grid5000.fakes import (
     CLUSTERS,
     NODES,
@@ -308,3 +312,81 @@ def test_view_names() -> None:
     assert [view_name(h) for h in (24, 168, 720)] == ['Day', 'Week', 'Month']
     assert view_name(12) == '12 h'
     assert view_name(72) == '3 days'
+
+
+# Reserving
+
+
+def reserving_client(sent: list, user: str = 'alice') -> Client:
+    """The fake API with gros's reservations, which also takes new jobs."""
+    fake = fake_grid5000(
+        SITES, CLUSTERS, nodes=NODES, schedules={('nancy', 'gros'): SCHEDULE}
+    )
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        if request.method == 'POST':
+            return httpx.Response(201, json={'uid': 777})
+        return fake.handler(request)
+
+    return Client(user=user, transport=httpx.MockTransport(handle))
+
+
+class ReserveApp(App):
+    """The panel on nancy/gros, with a client that takes new jobs."""
+
+    def __init__(self, client: Client) -> None:
+        super().__init__()
+        self.client = client
+
+    def compose(self) -> ComposeResult:
+        yield ReservationsPanel(self.client, 'nancy', 'gros', now=lambda: SCHEDULE_NOW)
+
+
+async def test_reserve_opens_the_form_filled_from_the_slot_boxes() -> None:
+    """Nodes and hours come from the slot finder; the cores from gros's nodes."""
+    app = ReserveApp(reserving_client([]))
+    async with app.run_test(size=(140, 40)) as pilot:
+        await settle(app, pilot)
+        app.query_one('#slot-nodes', Input).value = '1'
+        app.query_one('#slot-hours', Input).value = '2'
+        await settle(app, pilot)
+        await pilot.click('#res-reserve')
+        await settle(app, pilot)
+        form = app.screen
+        assert isinstance(form, NewReservation)
+        assert form.query_one('#new-nodes', Input).value == '1'
+        assert form.query_one('#new-hours', Input).value == '2'
+        gros = NODES[('nancy', 'gros')]
+        cores = [node.get('architecture', {}).get('nb_cores', 0) for node in gros]
+        assert (form.node_cores, form.cluster_cores) == (max(cores), sum(cores))
+
+
+async def test_reserving_sends_the_job_and_reloads() -> None:
+    """Reserve in the form: POST nancy's jobs for gros, then the timeline again."""
+    sent: list = []
+    app = ReserveApp(reserving_client(sent))
+    async with app.run_test(size=(140, 40)) as pilot:
+        await settle(app, pilot)
+        panel(app).action_reserve()
+        await settle(app, pilot)
+        sent.clear()
+        await pilot.click('#reserve')
+        await settle(app, pilot)
+        post = next(request for request in sent if request.method == 'POST')
+        assert post.url.path == '/stable/sites/nancy/jobs'
+        body = json.loads(post.content)
+        assert body['resources'] == 'nodes=1,walltime=1:00:00'
+        assert body['properties'] == "cluster='gros'"
+        assert any(r.url.path.endswith('/clusters/gros/status') for r in sent)
+        assert not isinstance(app.screen, NewReservation)
+
+
+async def test_reserving_needs_a_login() -> None:
+    """Without a login there's no form, only a message."""
+    app = ReserveApp(reserving_client([], user=''))
+    async with app.run_test(size=(140, 40)) as pilot:
+        await settle(app, pilot)
+        panel(app).action_reserve()
+        await settle(app, pilot)
+        assert not isinstance(app.screen, NewReservation)

@@ -87,22 +87,44 @@ def settings_from_env(secret_dir: Path | None = None) -> dict[str, str]:
 class ApiError(Exception):
     """The API answered with an error."""
 
-    def __init__(self, path: str, status: int) -> None:
+    def __init__(
+        self, path: str, status: int, method: str = 'GET', detail: str = ''
+    ) -> None:
         """Make the error.
 
         Args:
             path: The API path that was asked for, e.g. '/sites'.
             status: The HTTP status the API answered with, e.g. 401.
+            method: The request's method, e.g. 'POST'.
+            detail: What the API said was wrong, if it said (e.g. why a job
+                was refused).
         """
         self.path = path
         self.status = status
-        message = f'GET {path}: {status} {httpx.codes.get_reason_phrase(status)}'
+        self.detail = detail
+        reason = httpx.codes.get_reason_phrase(status)
+        message = f'{method} {path}: {status} {reason}'
+        if detail:
+            message += f': {detail}'
         if status == 401:
             message += (
                 " (outside Grid'5000, set G5K_USER and G5K_PASSWORD"
                 f' or put them in ~/{SECRET_DIR_NAME}/)'
             )
         super().__init__(message)
+
+
+def error_detail(response: httpx.Response) -> str:
+    """What the API said was wrong, in a line: its message, else its text."""
+    try:
+        answer = response.json()
+    except ValueError:
+        return response.text.strip()[:300]
+    if isinstance(answer, dict):
+        for key in ('message', 'error', 'title'):
+            if answer.get(key):
+                return str(answer[key])[:300]
+    return ''
 
 
 async def _wait_for(request: asyncio.Future) -> Any:
@@ -216,6 +238,34 @@ class Connection:
             del self._waiting[path]
         if not request.cancelled():
             request.exception()  # marked as seen: no warning if nobody waited
+
+    async def send(self, method: str, path: str, body: Any = None) -> Any:
+        """Send a request that changes something (POST, DELETE): never shared
+        nor remembered.
+
+        Args:
+            method: 'POST' or 'DELETE'.
+            path: The API path, e.g. '/sites/nancy/jobs'.
+            body: The JSON to send, if any.
+
+        Returns:
+            The JSON answer; None if the answer has none.
+        """
+        http = self._client()
+        self.sent += 1
+        response = await http.request(method, path, json=body)
+        if not response.is_success:
+            raise ApiError(path, response.status_code, method, error_detail(response))
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def forget(self, prefix: str) -> None:
+        """Forget the remembered answers whose path starts with prefix, e.g.
+        a site's after you reserved there: the next ask gets the news."""
+        for path in [path for path in self._memory if path.startswith(prefix)]:
+            del self._memory[path]
 
     async def aclose(self) -> None:
         """Stop the requests still on their way, and close the connection."""
