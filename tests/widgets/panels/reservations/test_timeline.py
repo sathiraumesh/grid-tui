@@ -1,5 +1,6 @@
 """Tests for the timeline drawing: axis, policy band, rows, bars, free strip."""
 
+import re
 from datetime import datetime
 
 from rich.text import Text
@@ -20,6 +21,7 @@ from grid_tui.widgets.panels.reservations.timeline import (
     now_label,
     policy_band,
     slot_line,
+    tick_days,
     tick_hours,
     with_now,
 )
@@ -219,3 +221,46 @@ def test_now_is_red() -> None:
     marked = with_now(Text(' ' * WIDTH), WINDOW, WIDTH, SCHEDULE_NOW)
     assert NOW_RED in colour_at(marked, column)
     assert NOW_RED != ADMIN
+
+
+# Many days on screen
+
+
+DAY = 24 * HOUR
+
+
+def test_tick_days_keep_dates_apart() -> None:
+    """Dates are labelled every 1, 2, 3, 7 or 14 days, with room between."""
+    assert tick_days(Window(0, 7 * DAY), 100) == 1
+    assert tick_days(Window(0, 30 * DAY), 100) == 3
+    assert tick_days(Window(0, 30 * DAY), 40) == 7
+    assert tick_days(Window(0, 30 * DAY), 10) == 14
+
+
+def test_a_month_axis_has_months_and_spaced_dates() -> None:
+    """Over a month: the month names on top, dates far enough apart below."""
+    window = Window(SCHEDULE_NOW - 4 * DAY, SCHEDULE_NOW + 26 * DAY)
+    months, dates = axis_lines(window, 100)
+    assert months.plain.startswith('November 2026')
+    assert 'December' in months.plain
+    labels = [m.start() for m in re.finditer(r'\d\d [A-Z][a-z]{2}', dates.plain)]
+    assert len(labels) >= 5
+    assert min(b - a for a, b in zip(labels, labels[1:])) >= 7  # never touching
+
+
+def test_the_dates_stay_the_same_days_when_moving() -> None:
+    """Moving a day later keeps labelling the same dates (not shifting by one)."""
+    first = Window(SCHEDULE_NOW, SCHEDULE_NOW + 30 * DAY)
+    later = Window(SCHEDULE_NOW + DAY, SCHEDULE_NOW + 31 * DAY)
+    pattern = r'\d\d [A-Z][a-z]{2}'
+    a = set(re.findall(pattern, axis_lines(first, 100)[1].plain))
+    b = set(re.findall(pattern, axis_lines(later, 100)[1].plain))
+    assert len(a & b) >= len(a) - 2  # the same dates, but for the ends
+
+
+def test_a_week_still_names_each_day() -> None:
+    """Over a week there's room for each day's name and its hours."""
+    window = Window(SCHEDULE_NOW, SCHEDULE_NOW + 7 * DAY)
+    days, hours = axis_lines(window, 100)
+    assert 'Fri 27' in days.plain + hours.plain
+    assert '12' in hours.plain

@@ -295,3 +295,63 @@ async def test_choosing_a_job_opens_its_clusters_reservations() -> None:
         assert app.query_one(MainTabs).active == 'reservations'
         panel = app.query_one(ReservationsPanel)
         assert (panel.site, panel.cluster) == ('nancy', 'gros')
+
+
+# The help line shows the shown tab's keys
+
+
+async def test_opening_reservations_shows_its_keys_without_a_click() -> None:
+    """After 4, the timeline has the focus: d, w and m are in the help line."""
+    from grid_tui.widgets.panels.reservations import ReservationsPanel
+
+    app = Grid5KApp(g5k_client())
+    async with app.run_test(size=(140, 30)) as pilot:
+        await settle(app, pilot)
+        await pilot.press('4')
+        await pilot.pause()
+        panel = app.query_one(ReservationsPanel)
+        assert panel in app.focused.ancestors
+        assert {'d', 'w', 'm', 'z', 'n'} <= set(app.screen.active_bindings)
+
+
+async def test_a_reservations_key_works_straight_after_opening_the_tab() -> None:
+    """w works right after 4, with no click on the timeline first."""
+    from grid_tui.widgets.panels.reservations import ReservationsPanel
+
+    app = Grid5KApp(g5k_client())
+    async with app.run_test(size=(140, 30)) as pilot:
+        await settle(app, pilot)
+        await pilot.press('4')
+        await pilot.pause()
+        await pilot.press('w')
+        assert app.query_one(ReservationsPanel).hours == 7 * 24
+
+
+async def test_every_tab_puts_the_focus_in_its_panel() -> None:
+    """Each tab, once shown, has the focus inside its own panel."""
+    app = Grid5KApp(g5k_client())
+    async with app.run_test(size=(140, 30)) as pilot:
+        await settle(app, pilot)
+        for key, tab in zip('123456', MainTabs.TAB_IDS):
+            await pilot.press(key)
+            await pilot.pause()
+            pane = app.query_one(f'#{tab}')
+            assert pane in app.focused.ancestors, tab
+
+
+async def test_jobs_tab_shows_ssh_in_the_help_line() -> None:
+    """After 6, s (SSH to machine) is in the help line."""
+    app = Grid5KApp(g5k_client())
+    async with app.run_test(size=(140, 30)) as pilot:
+        await settle(app, pilot)
+        await pilot.press('6')
+        await pilot.pause()
+        assert 's' in app.screen.active_bindings
+
+
+async def test_the_app_starts_with_the_focus_on_the_sites_table() -> None:
+    """At start, the Sites table has the focus (no click needed to move in it)."""
+    app = Grid5KApp(g5k_client())
+    async with app.run_test(size=(140, 30)) as pilot:
+        await settle(app, pilot)
+        assert app.focused is app.query_one(SitesPanel).query_one(DataTable)

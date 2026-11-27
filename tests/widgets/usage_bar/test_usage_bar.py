@@ -14,6 +14,7 @@ from grid_tui.widgets.usage_bar.usage_bar import (
     SETTLE_SECONDS,
     TABS_WIDTH,
     jobs_text,
+    level_colour,
 )
 from tests.grid5000.fakes import SITES, STATUS, fake_grid5000, g5k_client
 from tests.widgets.panels.helpers import settle
@@ -29,10 +30,42 @@ def test_bar() -> None:
     assert bar(250).plain == '████████'
 
 
-def test_bar_is_green_until_the_quota_is_used_up() -> None:
-    """Green while under 100%, red from 100%."""
-    assert '#a6e3a1' in str(bar(60).spans[0].style)
-    assert '#f38ba8' in str(bar(100).spans[0].style)
+def test_bar_colour_follows_how_full_the_quota_is() -> None:
+    """Green under half, yellow from 50%, orange from 80%, red once used up."""
+    # the first span's colour (a partial cell is 'colour on grey')
+    colours = {
+        p: str(bar(p).spans[0].style).split(' on ')[0]
+        for p in (10, 49, 50, 79, 80, 99, 100)
+    }
+    assert colours == {
+        10: '#a6e3a1',
+        49: '#a6e3a1',
+        50: '#f9e2af',
+        79: '#f9e2af',
+        80: '#fab387',
+        99: '#fab387',
+        100: '#f38ba8',
+    }
+
+
+def test_level_colour() -> None:
+    """The same colours as the bar, for the percentage beside it."""
+    assert [level_colour(p) for p in (0, 60, 90, 150)] == [
+        '#a6e3a1',
+        '#f9e2af',
+        '#fab387',
+        '#f38ba8',
+    ]
+
+
+def test_the_percentage_has_the_bars_colour() -> None:
+    """In the line, 'NN% quota' is the same colour as its bar."""
+    line = UsageBar(g5k_client())
+    line.mine = MyUsage(jobs=1, cores=8, quota_percent=85)
+    text = line.line(0)
+    start = text.plain.index('85% quota')
+    styles = [str(span.style) for span in text.spans if span.start <= start < span.end]
+    assert any('#fab387' in style for style in styles)
 
 
 def test_jobs_text() -> None:
@@ -276,3 +309,24 @@ async def test_the_app_stops_polling_in_the_background() -> None:
         assert not app.polling
         app.away(False)
         assert app.polling
+
+
+def test_a_small_share_still_shows_a_coloured_sliver() -> None:
+    """3% is a thin coloured sliver, not an empty bar."""
+    small = bar(3)
+    assert small.plain == '▎░░░░░░░'
+    assert small.plain.count('░') == 7
+    assert '#a6e3a1' in str(small.spans[0].style)  # green
+
+
+def test_any_use_shows_at_least_an_eighth() -> None:
+    """1% still shows the thinnest sliver; 0% is empty."""
+    assert bar(1).plain[0] == '▏'
+    assert bar(0).plain == '░' * 8
+
+
+def test_the_bar_is_drawn_in_eighths() -> None:
+    """Halfway through a cell is a half block; the bar stays 8 cells wide."""
+    assert bar(25).plain == '██░░░░░░'
+    assert bar(31).plain == '██▌░░░░░'  # 2.48 cells: 2 full, then half a cell
+    assert all(len(bar(p).plain) == 8 for p in range(0, 130, 3))

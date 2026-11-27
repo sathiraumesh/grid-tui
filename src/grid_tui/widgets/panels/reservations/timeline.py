@@ -108,11 +108,28 @@ def tick_hours(window: Window, width: int) -> int:
     return 24
 
 
+def tick_days(window: Window, width: int) -> int:
+    """How many days between date labels, so they don't crowd: 1, 2, 3, 7 or 14.
+
+    Used when even one label a day is too many hours to name (a week or a
+    month on screen).
+    """
+    days = window.span / 86400
+    for step in (1, 2, 3, 7, 14):
+        if width / (days / step) >= 8:  # at least 8 columns per label
+            return step
+    return 14
+
+
 def axis_lines(window: Window, width: int) -> tuple[Text, Text]:
     """Two lines over the bars: the days, and the hours.
 
+    Over a week or a month, the hours give way to dates: the top line names
+    the month, the second a date every day or few days.
+
     Returns:
-        (days, hours): e.g. 'Thu 26 ... Fri 27' and '18    21    00 ...'.
+        (days, hours): e.g. 'Thu 26 ... Fri 27' and '18    21    00 ...'; or,
+        over a month, 'November 2026 ... December' and '26 Nov  29 Nov ...'.
     """
     days: list[tuple[str, str]] = [(' ', MUTED)] * width
     hours: list[tuple[str, str]] = [(' ', MUTED)] * width
@@ -121,6 +138,8 @@ def axis_lines(window: Window, width: int) -> tuple[Text, Text]:
         minute=0, second=0, microsecond=0
     )
     day_style = f'bold {MUTED}'
+    if step >= 24 and tick_days(window, width) > 1:
+        return _date_axis(window, width, moment)
     _put(days, 0, moment.strftime('%a %d'), day_style)  # the first day
     while moment.timestamp() < window.end:
         column = window.column(moment.timestamp(), width)
@@ -132,6 +151,29 @@ def axis_lines(window: Window, width: int) -> tuple[Text, Text]:
                 _put(days, column, moment.strftime('%a %d'), day_style)
         moment += timedelta(hours=1)
     return _text(days), _text(hours)
+
+
+def _date_axis(window: Window, width: int, moment: datetime) -> tuple[Text, Text]:
+    """The axis over many days: the months, and a date every few days.
+
+    The dates are those whose day number since 1 January 1 divides by the
+    step, so they stay the same days while you move earlier and later.
+    """
+    months: list[tuple[str, str]] = [(' ', MUTED)] * width
+    dates: list[tuple[str, str]] = [(' ', MUTED)] * width
+    every = tick_days(window, width)
+    style = f'bold {MUTED}'
+    _put(months, 0, moment.strftime('%B %Y'), style)  # the first month
+    day = moment.replace(hour=0)
+    while day.timestamp() < window.end:
+        column = window.column(day.timestamp(), width)
+        if 0 <= column < width:
+            if day.toordinal() % every == 0:
+                _put(dates, column, day.strftime('%d %b'), MUTED)
+            if day.day == 1 and column > 0:
+                _put(months, column, day.strftime('%B'), style)
+        day = (day + timedelta(days=1)).replace(hour=0)  # midnight, even on DST days
+    return _text(months), _text(dates)
 
 
 def policy_band(window: Window, width: int) -> Text:

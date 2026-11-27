@@ -8,7 +8,7 @@ from grid_tui.grid5000 import Client
 from grid_tui.widgets.main_tabs import MainTabs
 from grid_tui.widgets.panels.clusters import ClusterPanel
 from grid_tui.widgets.panels.reservations import ReservationsPanel
-from grid_tui.widgets.panels.reservations.reservations import HINT
+from grid_tui.widgets.panels.reservations.reservations import HINT, view_name
 from tests.grid5000.fakes import (
     CLUSTERS,
     NODES,
@@ -100,16 +100,16 @@ async def test_a_free_row_says_so() -> None:
 
 
 async def test_z_zooms_out_and_around() -> None:
-    """z goes 24 h → 3 days → 7 days → 12 h; Z goes back."""
+    """z goes 24 h → 3 days → a week → a month → 12 h → 24 h; Z goes back."""
     app = PanelApp('nancy', 'gros')
     async with app.run_test(size=(120, 30)) as pilot:
         await settle(app, pilot)
         app.query_one(DataTable).focus()
         hours = []
-        for _ in range(4):
+        for _ in range(5):
             await pilot.press('z')
             hours.append(panel(app).hours)
-        assert hours == [72, 168, 12, 24]
+        assert hours == [72, 168, 720, 12, 24]
         await pilot.press('Z')
         assert panel(app).hours == 12
         assert '12 h' in str(app.query_one('#res-zoom', Label).render())
@@ -210,3 +210,101 @@ async def test_4_opens_the_tab_and_a_chosen_cluster_shows_there() -> None:
         assert app.query_one(MainTabs).active == 'reservations'
         assert (panel(app).site, panel(app).cluster) == ('nancy', 'gros')
         assert app.query_one(ReservationsPanel).query_one(DataTable).row_count == 4
+
+
+# The day, week and month views
+
+
+def zoom_label(app: App) -> str:
+    """The view's name and the keys, right of the cluster's name."""
+    return str(app.query_one('#res-zoom', Label).render())
+
+
+async def test_w_shows_a_week_and_m_a_month() -> None:
+    """w shows 7 days, m 30 days, each from around now."""
+    app = PanelApp('nancy', 'gros')
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        app.query_one(DataTable).focus()
+        await pilot.press('w')
+        assert panel(app).hours == 7 * 24
+        assert zoom_label(app).startswith('Week')
+        await pilot.press('m')
+        assert panel(app).hours == 30 * 24
+        assert zoom_label(app).startswith('Month')
+        window = panel(app).window()
+        assert window.start < SCHEDULE_NOW < window.end  # now is on screen
+
+
+async def test_d_goes_back_to_the_day_view() -> None:
+    """d is the standard 24 h view."""
+    app = PanelApp('nancy', 'gros')
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        app.query_one(DataTable).focus()
+        await pilot.press('m', 'd')
+        assert panel(app).hours == 24
+        assert zoom_label(app).startswith('Day')
+
+
+async def test_n_comes_back_to_now_on_the_day_view() -> None:
+    """After moving on a month view, n is now again, on the standard day view."""
+    app = PanelApp('nancy', 'gros')
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        app.query_one(DataTable).focus()
+        await pilot.press('m', 'right_square_bracket', 'right_square_bracket')
+        assert panel(app).shift > 0
+        await pilot.press('n')
+        assert (panel(app).hours, panel(app).shift) == (24, 0)
+
+
+async def test_a_view_key_starts_from_now() -> None:
+    """w after moving later shows the week from around now again."""
+    app = PanelApp('nancy', 'gros')
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        app.query_one(DataTable).focus()
+        await pilot.press('right_square_bracket', 'w')
+        assert panel(app).shift == 0
+
+
+async def test_changing_the_view_asks_the_api_nothing() -> None:
+    """d, w and m redraw from the schedule already loaded: no request is sent."""
+    seen: list = []
+
+    class SeenApp(App):
+        def compose(self) -> ComposeResult:
+            yield ReservationsPanel(
+                client(seen=seen), 'nancy', 'gros', now=lambda: SCHEDULE_NOW
+            )
+
+    app = SeenApp()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        asked = len(seen)
+        app.query_one(DataTable).focus()
+        await pilot.press('w', 'm', 'z', 'd', 'n', 'left_square_bracket')
+        await settle(app, pilot)
+        assert len(seen) == asked
+
+
+async def test_the_month_axis_names_the_months_and_some_dates() -> None:
+    """Over a month the axis shows the month names and dates, not hours."""
+    app = PanelApp('nancy', 'gros')
+    async with app.run_test(size=(120, 30)) as pilot:
+        await settle(app, pilot)
+        app.query_one(DataTable).focus()
+        await pilot.press('m')
+        await pilot.pause()
+        axis = static(app, '#res-axis')
+        assert 'November 2026' in axis
+        assert 'December' in axis
+        assert '30 Nov' in axis or '29 Nov' in axis or '28 Nov' in axis
+
+
+def test_view_names() -> None:
+    """The views have names; other zooms read as their length."""
+    assert [view_name(h) for h in (24, 168, 720)] == ['Day', 'Week', 'Month']
+    assert view_name(12) == '12 h'
+    assert view_name(72) == '3 days'

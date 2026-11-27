@@ -18,8 +18,12 @@ Three cards, like the Search tab:
     │ █ #7081934 alice · default · running · Thu 18:00 → Fri 04:00 · 4 nodes│
     ╰──────────────────────────────────────────────────────────────────────╯
 
-Nodes with the same reservations share a row. z zooms (12 h to 7 days),
-[ and ] move earlier and later, n comes back to now. The cluster can be
+Nodes with the same reservations share a row. d shows a day (the standard
+view), w a week, m a month; z zooms through them all (12 h to a month).
+[ and ] move earlier and later, n comes back to now, on the day view.
+
+Changing the view only redraws: it uses the schedule already loaded (an answer
+is remembered for a minute), so it asks the API nothing. The cluster can be
 picked here, or by choosing one in the Clusters or Search tab.
 
 Reservations change all the time: they are never cached, and are asked for
@@ -72,7 +76,8 @@ LEGEND = (
     'Timeline   [#a6e3a1]█[/] yours  [#f38ba8]█[/] maintenance'
     '  [#6c7086]░ best-effort[/]  [#45475a]▀[/] daytime quota  [#ff4d5e]┃[/] now'
 )
-ZOOMS = (12, 24, 72, 168)  # hours on screen: z goes to the next
+DAY, WEEK, MONTH = 24, 7 * 24, 30 * 24  # the views' hours on screen: d, w, m
+ZOOMS = (12, DAY, 72, WEEK, MONTH)  # hours on screen: z goes to the next
 LABEL_WIDTH = 16  # the node column
 LEFT = LABEL_WIDTH + 3  # where the timeline starts: the column and its padding
 REFRESH_SECONDS = 120  # reload this often, while the tab shows and the app has focus
@@ -101,6 +106,14 @@ def describe(reservation: Reservation, me: str = '') -> Text:
     return text
 
 
+def view_name(hours: int) -> str:
+    """What the view is called: 'Day', 'Week', 'Month', or its length."""
+    names = {DAY: 'Day', WEEK: 'Week', MONTH: 'Month'}
+    if hours in names:
+        return names[hours]
+    return f'{hours} h' if hours < 48 else f'{hours // 24} days'
+
+
 def read_number(text: str) -> float:
     """A box's number; 0 if it's empty or not a number."""
     try:
@@ -119,6 +132,9 @@ class ReservationsPanel(Widget):
         Binding('left_square_bracket', 'pan(-1)', 'Earlier'),
         Binding('right_square_bracket', 'pan(1)', 'Later'),
         Binding('n', 'now', 'Now'),
+        Binding('d', 'view(24)', 'Day'),
+        Binding('w', 'view(168)', 'Week'),
+        Binding('m', 'view(720)', 'Month'),
     ]
 
     def __init__(
@@ -354,8 +370,17 @@ class ReservationsPanel(Widget):
 
     # ---- moving through time ------------------------------------------------
 
+    def action_view(self, hours: int) -> None:
+        """Show a day (d), a week (w) or a month (m), from around now.
+
+        Only redraws, from the schedule already loaded: nothing is asked.
+        """
+        self.hours = hours
+        self.shift = 0.0
+        self.draw()
+
     def action_zoom(self, step: int) -> None:
-        """Show more (z) or less (Z) time: 12 h, 24 h, 3 days, 7 days."""
+        """Show more (z) or less (Z) time: 12 h, 24 h, 3 days, a week, a month."""
         index = ZOOMS.index(self.hours) if self.hours in ZOOMS else 1
         self.hours = ZOOMS[(index + step) % len(ZOOMS)]
         self.draw()
@@ -366,7 +391,8 @@ class ReservationsPanel(Widget):
         self.draw()
 
     def action_now(self) -> None:
-        """Come back to now (n)."""
+        """Come back to now, on the standard day view (n)."""
+        self.hours = DAY
         self.shift = 0.0
         self.draw()
 
@@ -409,9 +435,11 @@ class ReservationsPanel(Widget):
             return
         title.update(f'{self.site} / {self.cluster}')
         title.add_class('-chosen')
-        span = f'{self.hours} h' if self.hours < 48 else f'{self.hours // 24} days'
         zoom.update(
-            Text.assemble((span, 'bold'), ('   z zoom · [ ] move · n now', MUTED))
+            Text.assemble(
+                (view_name(self.hours), 'bold'),
+                ('   d day · w week · m month · z zoom · [ ] move · n now', MUTED),
+            )
         )
         if self.schedule is None:
             return

@@ -6,8 +6,10 @@ It follows a site: the one highlighted in the Sites tab, or the last site or
 cluster chosen. Until there is one, your usage is about every site.
 
 - The period comes from the clock (see grid_tui.policy).
-- Your usage (green) is your share of today's daytime quota on your most used
+- Your usage is your share of today's daytime quota on your most used
   cluster of the site, and what you run there now (see grid_tui.my_usage).
+  The bar's colour says how close you are: green, yellow from half, orange
+  from 80%, red once it's used up.
 - How busy: the site's nodes that run a job, of those that are up, and the
   same for all of Grid'5000 ('G5K'). Every site's status comes in one round,
   so switching site shows its number at once.
@@ -44,21 +46,51 @@ SETTLE_SECONDS = 0.4  # moving through sites: wait for the cursor to stop
 
 TABS_WIDTH = 34  # the tab labels on the left of the same row: keep clear of them
 GREEN, RED = '#a6e3a1', '#f38ba8'
+YELLOW = '#f9e2af'
 EMPTY = '#45475a'
 MUTED = '#a6adc8'
 ORANGE = '#fab387'
 
 
+# how full the quota is → its colour: the first limit it is under
+LEVELS = ((50, GREEN), (80, YELLOW), (100, ORANGE))
+
+
+def level_colour(percent: int) -> str:
+    """The colour of a quota this full: green, yellow from 50, orange from 80,
+    red from 100 (used up)."""
+    for limit, colour in LEVELS:
+        if percent < limit:
+            return colour
+    return RED
+
+
+PARTS = ' ▏▎▍▌▋▊▉'  # a cell filled 0/8 to 7/8, from the left
+
+
 def bar(percent: int, width: int = BAR_WIDTH) -> Text:
-    """A green bar for a percentage, e.g. '██░░░░░░' for 25; red from 100.
+    """A bar for a percentage, e.g. '██░░░░░░' for 25, coloured by how full.
+
+    It is drawn in eighths of a cell, so a small share still shows: 3% is a
+    sliver ('▎'), not an empty bar. Anything above 0 shows at least 1/8.
 
     Args:
         percent: How full; below 0 is empty, 100 or more is full (and red).
         width: How many cells the bar has.
     """
-    filled = round(width * max(0, min(100, percent)) / 100)
-    colour = RED if percent >= 100 else GREEN
-    return Text.assemble(('█' * filled, colour), ('░' * (width - filled), EMPTY))
+    share = max(0, min(100, percent)) / 100
+    eighths = round(width * 8 * share)
+    if percent > 0:
+        eighths = max(eighths, 1)  # some use shows, however small
+    full, part = divmod(eighths, 8)
+    colour = level_colour(percent)
+    text = Text()
+    text.append('█' * full, colour)
+    if part:
+        # the partial cell: its filled left part coloured, on the empty colour
+        text.append(PARTS[part], f'{colour} on {EMPTY}')
+    text.append('░' * (width - full - (1 if part else 0)), EMPTY)
+    return text
 
 
 def jobs_text(mine: MyUsage) -> str:
@@ -241,8 +273,7 @@ class UsageBar(Static):
             if self.mine.quota_percent is not None:
                 percent = self.mine.quota_percent
                 text.append_text(bar(percent))
-                colour = RED if percent >= 100 else GREEN
-                text.append(f' {percent}% quota', f'bold {colour}')
+                text.append(f' {percent}% quota', f'bold {level_colour(percent)}')
                 text.append(' · ', MUTED)
             text.append(jobs_text(self.mine), GREEN)
         if detail >= 1:
